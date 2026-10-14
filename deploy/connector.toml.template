@@ -1,0 +1,108 @@
+# =============================================================================
+# Connector config for the Echo Merchant box — rendered by ./render.sh
+# =============================================================================
+# The connector is the payment proxy in front of the Echo Merchant. It meters
+# and settles the payment, then reverse-proxies the packet to the app over
+# plain HTTP. Everything the connector needs is in this one file.
+#
+# Rules the parser enforces, worth knowing before you edit:
+#
+#   * One TOML file, read once at startup, immutable for the process
+#     lifetime. There is NO environment-variable layer. Editing this file does
+#     nothing until the container restarts (a bind mount is not a reload).
+#   * Unknown keys are a hard startup failure. A config change and a connector
+#     upgrade must land in the right order. Land config first.
+#   * Every key that carries a secret is a PATH, never the value. Nothing in
+#     this file is a credential, so the rendered connector.toml is not a secret.
+#
+# ── This file targets an exact, immutable build ──────────────────────────────
+# `docker-compose.yml` pins the connector to one immutable `rust-<YYYY.MM.DD.N>`
+# release tag, and `tests/deploy_bundle.rs` pins the same literal. Bumping it is
+# a reviewed commit: change both together, landing this file's changes FIRST if
+# the new build wants a different schema.
+# =============================================================================
+
+# The client edge: POST /ilp, GET /ilp/btp, GET /ilp/identity and /metrics all
+# share this port. Bound to 0.0.0.0 INSIDE the container only — docker-compose
+# publishes it on 127.0.0.1, and nginx is what faces the internet.
+client_edge_addr = "0.0.0.0:4000"
+
+# Where this node records which claims it has already been paid. This MUST be a
+# mounted volume: a watermark that dies with the container hands every payer
+# their spent claims back as free service.
+state_dir = "/app/state"
+
+# Opens the BTP carriage on the same :4000 socket, for peerings established
+# over the operator surface.
+peer_expose = "btp"
+
+# This node's signing identity. `GET /ilp/identity` answers with this key.
+[signer]
+key_file = "/app/data/signer.key"
+
+
+# ── What this node sells ─────────────────────────────────────────────────────
+# One route, one app. A paid packet for this prefix is delivered as a plain
+# HTTP POST to `handler_url` and the Echo Merchant's Mirror comes back in the
+# FULFILL. The Echo Merchant answers every path, so the URL needs no suffix.
+#
+# The route MUST be priced. In TOON a route with price 0 takes no money (ADR
+# 0001, CONTEXT.md), and then a payer would prove nothing about its payment
+# flow. `price` is in the SMALLEST UNIT of the settlement token (USDC, 6
+# decimals): the charge for a packet is `base` plus `per_kib` for each KiB of
+# payload, so { base = 1, per_kib = 1 } is a millionth of a dollar plus a
+# millionth per KiB — dust, on devnet's mock USDC.
+[[routes]]
+prefix      = "g.toon.echo"
+handler_url = "http://echo-merchant:3000"
+price       = { base = 1, per_kib = 1 }
+
+
+# ── Getting paid ─────────────────────────────────────────────────────────────
+# Settlement is per-chain. A payer pays in whichever of these it holds; the
+# connector verifies the claim against the chain named here. Startup resolves
+# the token and reads its `decimals()` on chain, so a wrong RPC is exit 1 at
+# boot, not a runtime surprise.
+
+[settlement.evm]
+rpc_url                  = "https://base-sepolia-rpc.publicnode.com"
+token_address            = "0x0C996d7c934c79a6255254875607Fe69df25C0E1"  # USDC (6dp)
+decimals                 = 6
+# The EIP-712 domain of token_address: a client signs its deposit under this
+# domain, and a wrong value builds a signature that never verifies.
+asset_eip712_name        = "USDC"
+asset_eip712_version     = "2"
+# The devnet USDC is Circle's FiatToken, with ERC-3009.
+asset_transfer_method = "eip3009"
+# The x402 facilitator this node names for deposits into its channels.
+facilitator_url = "https://onboard.devnet.toonprotocol.dev"
+
+[settlement.evm.key]
+key_file = "/app/data/settlement.key"
+
+# `[settlement.solana]` (Solana devnet) is APPENDED by ./render.sh when
+# SETTLEMENT_SOLANA=on. It is not in this template because Solana startup
+# simulates a transaction, which an account holding no SOL cannot do: an
+# unfunded settlement-solana.key is an exit 1 at boot and a restart loop. So
+# turning it on is a separate, deliberate step, taken once the key has SOL.
+# See deploy/README.md.
+
+
+# ── The operator surface ─────────────────────────────────────────────────────
+# Gates /metrics and the redeem endpoints. Without this section they are not
+# mounted at all, which also means no way to redeem what you have earned.
+# Both are FILE-VALUED; render.sh writes them from .env.
+[operator]
+bearer_token_file = "/app/data/operator-bearer.token"
+write_keys_file   = "/app/data/operator-write.keys"
+
+
+# ── What this node says about itself ────────────────────────────────────────
+# `GET /ilp` serves this as the self-description a counterparty reads. Both
+# endpoints are the PUBLIC names. `addresses` lists every prefix terminated
+# above: a route this node terminates but does not advertise is one no client
+# can discover.
+[node]
+addresses     = ["g.toon.echo"]
+http_endpoint = "https://proxy.echo.${DOMAIN}/ilp"
+btp_endpoint  = "wss://proxy.echo.${DOMAIN}/ilp/btp"

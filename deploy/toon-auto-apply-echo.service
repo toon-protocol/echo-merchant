@@ -1,0 +1,11 @@
+[Unit]
+Description=Apply the merged TOON echo-merchant node bundle (fast-forward, render, compose up)
+Documentation=https://github.com/toon-protocol/echo-merchant/blob/main/deploy/README.md
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/root/echo-merchant/deploy/auto-apply.sh
+# The script takes its own flock; this only stops systemd stacking runs.
+TimeoutStartSec=600
