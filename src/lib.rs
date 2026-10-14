@@ -24,7 +24,7 @@ async fn mirror(method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Js
     Json(build_mirror(&method, &uri, &headers, &body))
 }
 
-/// Answer with the Mirror at the status the path names; 400 when it is not a status from 100 to 599.
+/// Answer with the Mirror at the status the path names; 400 when the stack cannot send that status with a Mirror.
 async fn status(
     code: Result<Path<String>, PathRejection>,
     method: Method,
@@ -32,15 +32,24 @@ async fn status(
     headers: HeaderMap,
     body: Bytes,
 ) -> (StatusCode, Json<Value>) {
-    let status = code
+    let chosen = code
         .ok()
-        .map(|Path(code)| code)
-        .filter(|code| !code.is_empty() && code.bytes().all(|b| b.is_ascii_digit()))
-        .and_then(|code| code.parse::<u16>().ok())
-        .filter(|code| (100..=599).contains(code))
-        .and_then(|code| StatusCode::from_u16(code).ok())
+        .and_then(|Path(code)| sendable_status(&code))
         .unwrap_or(StatusCode::BAD_REQUEST);
-    (status, Json(build_mirror(&method, &uri, &headers, &body)))
+    (chosen, Json(build_mirror(&method, &uri, &headers, &body)))
+}
+
+/// The status a decimal `code` from 100 to 599 names, if the stack can send it with a Mirror.
+fn sendable_status(code: &str) -> Option<StatusCode> {
+    if code.is_empty() || !code.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let status = StatusCode::from_u16(code.parse().ok()?).ok()?;
+    // hyper refuses a 1xx final answer, and drops the body of a 204 or 304.
+    let carries_mirror = (200..=599).contains(&status.as_u16())
+        && status != StatusCode::NO_CONTENT
+        && status != StatusCode::NOT_MODIFIED;
+    carries_mirror.then_some(status)
 }
 
 /// Build the Mirror: the request as it arrived; `payment` is the connector's attribution, else `null`.

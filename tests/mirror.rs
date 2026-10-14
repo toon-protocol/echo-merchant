@@ -1,6 +1,10 @@
 use axum::{body::Body, http::Request};
 use http_body_util::BodyExt;
 use serde_json::Value;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
 use tower::ServiceExt;
 
 async fn mirror_of(method: &str, uri: &str, body: &str) -> Value {
@@ -121,35 +125,39 @@ async fn partial_attribution_gives_null_payment_and_hides_headers() {
     }
 }
 
-async fn status_response(method: &str, uri: &str, attributed: bool) -> (u16, Value) {
-    let mut builder = Request::builder().method(method).uri(uri);
-    if attributed {
-        builder = builder
-            .header("x-toon-payer", "0xabc")
-            .header("x-toon-amount", "42")
-            .header("x-toon-chain", "devnet");
+/// Send one request to the router served on a real socket, so hyper encodes the answer.
+async fn status_and_mirror(method: &str, uri: &str, headers: &[(&str, &str)]) -> (u16, Value) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, echo_merchant::router()).await });
+    let mut request = format!(
+        "{method} {uri} HTTP/1.1\r\nhost: {addr}\r\nconnection: close\r\ncontent-length: 0\r\n"
+    );
+    for (name, value) in headers {
+        request += &format!("{name}: {value}\r\n");
     }
-    let response = echo_merchant::router()
-        .oneshot(builder.body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-    let status = response.status().as_u16();
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    (status, serde_json::from_slice(&bytes).unwrap())
+    request += "\r\n";
+    let mut stream = TcpStream::connect(addr).await.unwrap();
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    let (head, body) = response.split_once("\r\n\r\n").unwrap();
+    let status = head.split(' ').nth(1).unwrap().parse().unwrap();
+    (status, serde_json::from_str(body).unwrap())
 }
 
 #[tokio::test]
-async fn status_answers_every_code_with_a_mirror() {
-    for code in 100..=599u16 {
+async fn status_answers_each_sendable_code_with_a_mirror() {
+    for code in (200..=599u16).filter(|code| ![204, 304].contains(code)) {
         let uri = format!("/status/{code}");
-        let (status, mirror) = status_response("GET", &uri, false).await;
+        let (status, mirror) = status_and_mirror("GET", &uri, &[]).await;
         assert_eq!(status, code);
         assert_eq!(mirror["request"]["path"], uri);
     }
 }
 
 #[tokio::test]
-async fn status_rejects_bad_codes_with_a_mirror() {
+async fn status_rejects_bad_and_unsendable_codes_with_a_mirror() {
     for uri in [
         "/status/abc",
         "/status/99",
@@ -158,35 +166,50 @@ async fn status_rejects_bad_codes_with_a_mirror() {
         "/status/+503",
         "/status/-1",
         "/status/99999999",
+        "/status/100",
+        "/status/101",
+        "/status/199",
+        "/status/204",
+        "/status/304",
     ] {
-        let (status, mirror) = status_response("GET", uri, false).await;
+        let (status, mirror) = status_and_mirror("GET", uri, &[]).await;
         assert_eq!(status, 400, "{uri}");
         assert_eq!(mirror["request"]["method"], "GET", "{uri}");
+        assert_eq!(mirror["request"]["path"], uri, "{uri}");
     }
 }
 
 #[tokio::test]
 async fn status_works_for_any_method() {
     for method in ["GET", "POST", "PUT", "DELETE", "PATCH"] {
-        let (status, mirror) = status_response(method, "/status/503", false).await;
+        let (status, mirror) = status_and_mirror(method, "/status/503", &[]).await;
         assert_eq!(status, 503);
         assert_eq!(mirror["request"]["method"], method);
     }
 }
 
 #[tokio::test]
-async fn status_shows_payment_and_other_paths_stay_200() {
-    let (_, mirror) = status_response("GET", "/status/503", true).await;
-    assert_eq!(mirror["payment"]["payer"], "0xabc");
+async fn status_shows_payment_like_any_other_path() {
+    let (_, mirror) = status_and_mirror(
+        "GET",
+        "/status/503",
+        &[
+            ("X-TOON-Payer", "evm:0xabc"),
+            ("x-toon-amount", "42"),
+            ("X-Toon-Chain", "evm:31337"),
+        ],
+    )
+    .await;
+    assert_eq!(mirror["payment"]["payer"], "evm:0xabc");
     assert_eq!(mirror["payment"]["amount"], "42");
-    assert_eq!(mirror["payment"]["chain"], "devnet");
-    assert!(mirror["request"]["headers"]
-        .as_object()
-        .unwrap()
-        .keys()
-        .all(|k| !k.starts_with("x-toon-")));
+    assert_eq!(mirror["payment"]["chain"], "evm:31337");
+    assert_no_attribution_headers(&mirror);
+}
+
+#[tokio::test]
+async fn paths_beside_status_code_still_answer_200() {
     for uri in ["/status", "/status/", "/status/503/x", "/other"] {
-        let (status, _) = status_response("GET", uri, false).await;
+        let (status, _) = status_and_mirror("GET", uri, &[]).await;
         assert_eq!(status, 200, "{uri}");
     }
 }
