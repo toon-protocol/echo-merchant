@@ -6,7 +6,7 @@ Start from a machine with nothing on it. Each step is one command.
 from the file `TOON_PASSPHRASE_FILE` names.
 
 ```sh
-curl -fsSL https://toon.ar.io/install.sh | sh
+curl -fsSL toon.ar.io/install.sh | sh
 mkdir -p ~/.config/toon
 printf '%s\n' 'a long passphrase you keep somewhere safe' > ~/.config/toon/passphrase
 chmod 600 ~/.config/toon/passphrase
