@@ -8,6 +8,9 @@ use axum::{
 };
 use serde_json::{json, Map, Value};
 
+/// Prefix of the headers the connector adds to attribute a paid delivery.
+const ATTRIBUTION_PREFIX: &str = "x-toon-";
+
 /// The router: every path and method gets a Mirror.
 pub fn router() -> Router {
     Router::new().fallback(any(mirror))
@@ -19,7 +22,7 @@ async fn mirror(method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Js
     let mut header_map = Map::new();
     for name in headers.keys() {
         // Attribution headers belong under `payment`, not in the request as it arrived.
-        if name.as_str().starts_with("x-toon-") {
+        if name.as_str().starts_with(ATTRIBUTION_PREFIX) {
             continue;
         }
         let values: Vec<_> = headers
@@ -32,16 +35,16 @@ async fn mirror(method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Js
     let path = uri
         .path_and_query()
         .map_or_else(|| uri.path().to_owned(), |pq| pq.as_str().to_owned());
-    let attribution = |name: &str| {
+    let attribution = |field: &str| {
         headers
-            .get(name)
+            .get(format!("{ATTRIBUTION_PREFIX}{field}"))
             .map(|value| String::from_utf8_lossy(value.as_bytes()).into_owned())
     };
     // The connector sends all three attribution headers or none; anything less is not a payment.
     let payment = match (
-        attribution("x-toon-payer"),
-        attribution("x-toon-amount"),
-        attribution("x-toon-chain"),
+        attribution("payer"),
+        attribution("amount"),
+        attribution("chain"),
     ) {
         (Some(payer), Some(amount), Some(chain)) => {
             json!({ "payer": payer, "amount": amount, "chain": chain })
