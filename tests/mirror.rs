@@ -59,3 +59,53 @@ async fn repeated_header_keeps_every_value() {
         "text/plain, application/json"
     );
 }
+
+async fn mirror_with(headers: &[(&str, &str)]) -> Value {
+    let mut builder = Request::builder().uri("/");
+    for (k, v) in headers {
+        builder = builder.header(*k, *v);
+    }
+    let response = echo_merchant::router()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+#[tokio::test]
+async fn all_three_attribution_headers_give_payment() {
+    let mirror = mirror_with(&[
+        ("X-TOON-Payer", "evm:0xabc"),
+        ("x-toon-amount", "123456789012345678901234567890"),
+        ("X-Toon-Chain", "evm:31337"),
+    ])
+    .await;
+    assert_eq!(mirror["payment"]["payer"], "evm:0xabc");
+    assert_eq!(
+        mirror["payment"]["amount"],
+        "123456789012345678901234567890"
+    );
+    assert_eq!(mirror["payment"]["chain"], "evm:31337");
+    assert!(mirror["request"]["headers"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .all(|k| !k.to_lowercase().starts_with("x-toon-")));
+}
+
+#[tokio::test]
+async fn no_attribution_gives_null_payment() {
+    assert!(mirror_with(&[("x-probe", "1")]).await["payment"].is_null());
+}
+
+#[tokio::test]
+async fn partial_attribution_gives_null_payment_and_hides_headers() {
+    let mirror = mirror_with(&[("x-toon-payer", "evm:0xabc"), ("x-toon-amount", "5")]).await;
+    assert!(mirror["payment"].is_null());
+    assert!(mirror["request"]["headers"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .all(|k| !k.starts_with("x-toon-")));
+}
