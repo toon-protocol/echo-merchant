@@ -12,6 +12,7 @@ it arrived, and the payment as it arrived. Devnet only, so the money is mock USD
 [![CI](https://img.shields.io/github/actions/workflow/status/toon-protocol/echo-merchant/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/toon-protocol/echo-merchant/actions/workflows/ci.yml)
 [![Image](https://img.shields.io/github/actions/workflow/status/toon-protocol/echo-merchant/publish-image.yml?branch=main&style=flat-square&label=image&color=c9a24a)](https://github.com/toon-protocol/echo-merchant/actions/workflows/publish-image.yml)
 [![Network](https://img.shields.io/badge/network-devnet%20only-lightgrey?style=flat-square)](docs/guide/echo-flow.md)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-b7410e?style=flat-square)](https://www.rust-lang.org)
 
 [**The Echo flow**](docs/guide/echo-flow.md) · [**Status codes**](docs/guide/status-codes.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
@@ -59,6 +60,7 @@ deposit.
   to, and `null` when the request carried none.
 - **It holds nothing of yours.** The app is one axum router with no keys and no state.
 - **Devnet only.** Base Sepolia or Solana devnet, paid in mock USDC from the faucet.
+- **MIT licence.**
 
 Below: why it is built this way, how the pieces fit, the [guides](#guides).
 
