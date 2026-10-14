@@ -85,7 +85,8 @@ toon send g.toon.echo --amount 10 --seal-to "$ECHO_ILP_URL" --body body.json --y
 **The charge is not what you signed for.** `payment.amount` is the **charge**, what this route's
 price comes to for this packet: 1, plus 1 per KiB. The **cost** is what you signed for, the
 `--amount` the packet was paid with. The cost minus the charge is the **fees** the hops between you
-and the Echo Merchant took. `toon send` reports the cost as `paid`; compare it with
+and the Echo Merchant took, plus whatever you sent above the price, which the Echo Merchant's
+connector keeps. `toon send` reports the cost as `paid`; compare it with
 `payment.amount` to see where your value went. Send a larger body and watch the charge grow.
 
 **7. Withdraw the channel's collateral.** Take the channel id from `toon channel list`:

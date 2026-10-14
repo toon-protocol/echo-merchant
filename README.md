@@ -15,7 +15,7 @@ it arrived, and the payment as it arrived. Devnet only, so the money is mock USD
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-b7410e?style=flat-square)](https://www.rust-lang.org)
 
-[**The Echo flow**](docs/guide/echo-flow.md) · [**Status codes**](docs/guide/status-codes.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
+[**The Echo flow**](docs/guide/echo-flow.md) · [**Status codes**](docs/guide/status-codes.md) · [**Failures**](docs/guide/failures.md) · [**Run your own**](docs/guide/running-your-own.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/toon-protocol/toon_cli/main/install.sh | sh
@@ -81,8 +81,8 @@ The Mirror is built so a payer can check its whole payment flow against it:
 - **The Mirror loses no byte.** A body that is valid UTF-8 comes back as text; any other
   body comes back as base64, so you can compare it byte for byte.
 - **The Mirror shows the charge, not the cost.** Compare `payment.amount` with what
-  `toon send` reports as `paid` to see the fees the hops between you and the Echo
-  Merchant took.
+  `toon send` reports as `paid`: the gap is the hops' fees, plus what you sent above the
+  price, which the Echo Merchant's connector keeps.
 - **The Mirror comes back with any status you ask for.** `/status/503` answers 503 and a
   Mirror, and an error answer is still paid ([status codes](docs/guide/status-codes.md)).
 
@@ -128,6 +128,7 @@ Amounts are in the token's base units; on devnet the token has 6 decimals.
 | [The Echo flow](docs/guide/echo-flow.md) | Install, fund, open a channel, pay, read the Mirror, the charge against the cost, and withdrawing |
 | [`/status/{code}`](docs/guide/status-codes.md) | Asking for an error status, what is still paid, and which codes answer 400 |
 | [Failures you must handle](docs/guide/failures.md) | The greeting, an underpayment (`F03`), no route (`F02`), and reading a reject |
+| [Running your own Echo Merchant](docs/guide/running-your-own.md) | An agent node as a hidden service or at a clearnet hostname, `toon add` with the image, the price, and paying it |
 
 ## Reference
 
