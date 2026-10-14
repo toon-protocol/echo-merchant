@@ -19,7 +19,7 @@
 #                                 Its loopback publish MOVES to 127.0.0.1:4005
 #                                 (`ports: !override`) so it does not collide
 #                                 with the other nodes on the host. The port is
-#                                 this node's assignment in the infra ticket.
+#                                 this node's assignment in infra#55.
 #   echo-merchant                never published or aliased anywhere.
 #
 # `edge-echo` is this node's OWN network: the edge project creates one per node

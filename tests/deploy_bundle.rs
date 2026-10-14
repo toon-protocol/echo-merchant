@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const CONNECTOR_IMAGE: &str = "ghcr.io/toon-protocol/connector:rust-2026.09.29.1";
 
@@ -10,10 +11,13 @@ fn deploy_dir() -> PathBuf {
 }
 
 /// Run `render.sh` in a scratch copy of the bundle and parse the `connector.toml` it writes.
+/// Each call gets its own scratch directory, because the tests run in parallel.
 fn render(solana: bool) -> toml::Table {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
     let scratch = std::env::temp_dir().join(format!(
-        "echo-merchant-render-{}-{solana}",
-        std::process::id()
+        "echo-merchant-render-{}-{}",
+        std::process::id(),
+        CALLS.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(scratch.join("nginx")).unwrap();

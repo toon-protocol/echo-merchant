@@ -12,7 +12,7 @@ fresh Ubuntu host is the entire install.
 
 The connector serves one route, `g.toon.echo`, priced `{ base = 1, per_kib = 1 }` in
 USDC base units. The price must stay above zero: in TOON a route with price 0 takes
-no money (ADR 0001). It accepts channels on Base Sepolia, and on Solana devnet once
+no money (ADR 0001, CONTEXT.md). It accepts channels on Base Sepolia, and on Solana devnet once
 `SETTLEMENT_SOLANA=on`.
 
 ## Files
@@ -55,7 +55,8 @@ as `echo-proxy`, and moves its loopback publish to `127.0.0.1:4005`.
 
 The host-side wiring is not done here. Choosing the next free loopback admin port,
 creating the `edge-echo` network, and adding `proxy.echo.<DOMAIN>` to the edge's
-routes is a change in `toon-protocol/infra`, filed there. The edge must keep what
+routes is a change in `toon-protocol/infra`, filed there as
+[infra#55](https://github.com/toon-protocol/infra/issues/55). The edge must keep what
 nginx does here: the rate limit and the CORS header on `/ilp/identity`. Until that
 ticket lands, port 4005 and the `edge-echo` name are this bundle's proposal.
 

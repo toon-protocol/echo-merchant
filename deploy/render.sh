@@ -9,8 +9,8 @@
 # Every output is gitignored. Edit the templates.
 #
 # envsubst is given an EXPLICIT variable list. Without one it would substitute
-# every $NAME it sees, and both templates contain nginx variables ($host,
-# $backend, $binary_remote_addr) that must survive to the rendered file.
+# every $NAME it sees, and the nginx template contains nginx variables ($host,
+# $upstream, $binary_remote_addr) that must survive to the rendered file.
 set -euo pipefail
 cd "$(dirname "$0")"
 
