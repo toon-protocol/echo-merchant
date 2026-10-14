@@ -1,7 +1,16 @@
 use axum::{body::Body, http::Request};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use tower::ServiceExt;
+
+/// Send `request` to the Echo Merchant and parse the Mirror it answers with.
+async fn mirror_from(request: Request<Body>) -> Value {
+    let response = echo_merchant::router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), 200);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
+}
 
 async fn mirror_of(method: &str, uri: &str, body: &str) -> Value {
     let request = Request::builder()
@@ -10,10 +19,7 @@ async fn mirror_of(method: &str, uri: &str, body: &str) -> Value {
         .header("x-probe", "hello")
         .body(Body::from(body.to_owned()))
         .unwrap();
-    let response = echo_merchant::router().oneshot(request).await.unwrap();
-    assert_eq!(response.status(), 200);
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    serde_json::from_slice(&bytes).unwrap()
+    mirror_from(request).await
 }
 
 #[tokio::test]
@@ -50,10 +56,7 @@ async fn repeated_header_keeps_every_value() {
         .header("accept", "application/json")
         .body(Body::empty())
         .unwrap();
-    let response = echo_merchant::router().oneshot(request).await.unwrap();
-    assert_eq!(response.status(), 200);
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let mirror: Value = serde_json::from_slice(&bytes).unwrap();
+    let mirror = mirror_from(request).await;
     assert_eq!(
         mirror["request"]["headers"]["accept"],
         "text/plain, application/json"
@@ -65,13 +68,7 @@ async fn mirror_with(headers: &[(&str, &str)]) -> Value {
     for (name, value) in headers {
         builder = builder.header(*name, *value);
     }
-    let response = echo_merchant::router()
-        .oneshot(builder.body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    serde_json::from_slice(&bytes).unwrap()
+    mirror_from(builder.body(Body::empty()).unwrap()).await
 }
 
 fn assert_no_attribution_headers(mirror: &Value) {
@@ -119,4 +116,37 @@ async fn partial_attribution_gives_null_payment_and_hides_headers() {
         assert!(mirror["payment"].is_null());
         assert_no_attribution_headers(&mirror);
     }
+}
+
+async fn mirror_of_bytes(body: Vec<u8>) -> Value {
+    let request = Request::builder()
+        .method("POST")
+        .uri("/")
+        .body(Body::from(body))
+        .unwrap();
+    mirror_from(request).await
+}
+
+#[tokio::test]
+async fn non_utf8_body_comes_back_as_base64_of_exact_bytes() {
+    let sent = vec![0xff, 0xfe, 0x00, 0x80, 0xc0, 0x41];
+    let mirror = mirror_of_bytes(sent.clone()).await;
+    let request = &mirror["request"];
+    assert_eq!(request["body_encoding"], "base64");
+    let decoded = STANDARD.decode(request["body"].as_str().unwrap()).unwrap();
+    assert_eq!(decoded, sent);
+}
+
+#[tokio::test]
+async fn multibyte_utf8_body_comes_back_as_text() {
+    let mirror = mirror_of_bytes("héllo 世界 🦀".as_bytes().to_vec()).await;
+    assert_eq!(mirror["request"]["body"], "héllo 世界 🦀");
+    assert_eq!(mirror["request"]["body_encoding"], "utf8");
+}
+
+#[tokio::test]
+async fn empty_body_comes_back_as_empty_text() {
+    let mirror = mirror_of_bytes(Vec::new()).await;
+    assert_eq!(mirror["request"]["body"], "");
+    assert_eq!(mirror["request"]["body_encoding"], "utf8");
 }
