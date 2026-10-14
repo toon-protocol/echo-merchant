@@ -17,17 +17,21 @@ each paid packet with a Mirror: the request as it arrived, and the payment as it
 
 [**Run it**](docs/guide/running.md) · [**Deploy a box**](deploy/README.md) · [**Pay it**](docs/guide/echo-flow.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
 
+### Install
+
+```sh
+curl -fsSL https://toon.ar.io/install.sh | sh
+```
+
 </div>
 
 ---
 
 ## Three steps
 
-**1. Install `toon` and create the agent node.** It is a hidden service unless you name a
-hostname.
+**1. Create the agent node.** It is a hidden service unless you name a hostname.
 
 ```sh
-curl -fsSL https://toon.ar.io/install.sh | sh
 toon init --network devnet --accept-anyone-terms     # or --clearnet <hostname>
 ```
 
