@@ -128,6 +128,14 @@ export async function loadGate(sandbox: Sandbox, base: string): Promise<Gate> {
 }
 
 /**
+ * The shell line that runs one step the way GitHub Actions does: under bash with
+ * `-eo pipefail`. `sandbox.exec` runs under `sh`, which may be dash, and dash has no
+ * `pipefail`, so the step cannot be handed to it directly.
+ */
+export const stepScript = (command: string): string =>
+  `bash --noprofile --norc -eo pipefail -c ${shellQuote(command)}`;
+
+/**
  * Run `steps` in order, stopping at the first failure.
  *
  * Failure is returned, not thrown, so the caller can decide between a fix
@@ -139,7 +147,7 @@ export async function runGate(sandbox: Sandbox, steps: readonly GateStep[]): Pro
   for (const step of steps) {
     console.log(`  [gate] ${step.name}: ${step.command}`);
     const lines: string[] = [];
-    const result = await sandbox.exec(`set -eo pipefail\n${step.command}`, {
+    const result = await sandbox.exec(stepScript(step.command), {
       onLine: (line) => {
         lines.push(line);
         // Stream sparingly: full build output would bury the runner log.

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gateFromCi } from './run-gate.ts';
+import { spawnSync } from 'node:child_process';
+import { gateFromCi, stepScript } from './run-gate.ts';
 
 const CI = `
 name: CI
@@ -99,4 +100,22 @@ test('a GitHub expression in env or working-directory skips the step too', () =>
 test('the expression note names the expression syntax literally', () => {
   const { notes } = gateFromCi('jobs:\n  gate:\n    steps:\n      - run: echo ${{ x }}\n');
   assert.match(notes.join('\n'), /a \$\{\{ \}\} expression/);
+});
+
+// The sandbox hands each step to `sh`, which may be dash: the step must not depend on it.
+const runUnderSh = (command: string) => spawnSync('sh', ['-c', stepScript(command)], { encoding: 'utf8' });
+
+test('a step runs under bash with pipefail, whatever sh is', () => {
+  assert.notEqual(runUnderSh('false | true').status, 0);
+  assert.equal(runUnderSh('true | true').status, 0);
+});
+
+test('a step stops at its first failing line, as in GitHub Actions', () => {
+  const result = runUnderSh('false\necho after');
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stdout, '');
+});
+
+test('a step with quotes reaches bash unchanged', () => {
+  assert.equal(runUnderSh(`export NAME='it'\\''s' && echo "$NAME" '$NAME'`).stdout, "it's $NAME\n");
 });
