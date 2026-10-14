@@ -120,3 +120,73 @@ async fn partial_attribution_gives_null_payment_and_hides_headers() {
         assert_no_attribution_headers(&mirror);
     }
 }
+
+async fn status_response(method: &str, uri: &str, attributed: bool) -> (u16, Value) {
+    let mut builder = Request::builder().method(method).uri(uri);
+    if attributed {
+        builder = builder
+            .header("x-toon-payer", "0xabc")
+            .header("x-toon-amount", "42")
+            .header("x-toon-chain", "devnet");
+    }
+    let response = echo_merchant::router()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    (status, serde_json::from_slice(&bytes).unwrap())
+}
+
+#[tokio::test]
+async fn status_answers_every_code_with_a_mirror() {
+    for code in 100..=599u16 {
+        let uri = format!("/status/{code}");
+        let (status, mirror) = status_response("GET", &uri, false).await;
+        assert_eq!(status, code);
+        assert_eq!(mirror["request"]["path"], uri);
+    }
+}
+
+#[tokio::test]
+async fn status_rejects_bad_codes_with_a_mirror() {
+    for uri in [
+        "/status/abc",
+        "/status/99",
+        "/status/600",
+        "/status/%FF",
+        "/status/+503",
+        "/status/-1",
+        "/status/99999999",
+    ] {
+        let (status, mirror) = status_response("GET", uri, false).await;
+        assert_eq!(status, 400, "{uri}");
+        assert_eq!(mirror["request"]["method"], "GET", "{uri}");
+    }
+}
+
+#[tokio::test]
+async fn status_works_for_any_method() {
+    for method in ["GET", "POST", "PUT", "DELETE", "PATCH"] {
+        let (status, mirror) = status_response(method, "/status/503", false).await;
+        assert_eq!(status, 503);
+        assert_eq!(mirror["request"]["method"], method);
+    }
+}
+
+#[tokio::test]
+async fn status_shows_payment_and_other_paths_stay_200() {
+    let (_, mirror) = status_response("GET", "/status/503", true).await;
+    assert_eq!(mirror["payment"]["payer"], "0xabc");
+    assert_eq!(mirror["payment"]["amount"], "42");
+    assert_eq!(mirror["payment"]["chain"], "devnet");
+    assert!(mirror["request"]["headers"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .all(|k| !k.starts_with("x-toon-")));
+    for uri in ["/status", "/status/", "/status/503/x", "/other"] {
+        let (status, _) = status_response("GET", uri, false).await;
+        assert_eq!(status, 200, "{uri}");
+    }
+}

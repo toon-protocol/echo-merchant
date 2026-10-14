@@ -2,7 +2,8 @@
 
 use axum::{
     body::Bytes,
-    http::{HeaderMap, Method, Uri},
+    extract::{rejection::PathRejection, Path},
+    http::{HeaderMap, Method, StatusCode, Uri},
     routing::any,
     Json, Router,
 };
@@ -11,13 +12,39 @@ use serde_json::{json, Map, Value};
 /// Prefix of the headers the connector adds to attribute a paid delivery.
 const ATTRIBUTION_PREFIX: &str = "x-toon-";
 
-/// The router: every path and method gets a Mirror.
+/// The router: every path and method gets a Mirror; `/status/{code}` answers with status `code`.
 pub fn router() -> Router {
-    Router::new().fallback(any(mirror))
+    Router::new()
+        .route("/status/{code}", any(status))
+        .fallback(any(mirror))
+}
+
+/// Answer with the Mirror at status 200.
+async fn mirror(method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Json<Value> {
+    Json(build_mirror(&method, &uri, &headers, &body))
+}
+
+/// Answer with the Mirror at the status the path names; 400 when it is not a status from 100 to 599.
+async fn status(
+    code: Result<Path<String>, PathRejection>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> (StatusCode, Json<Value>) {
+    let status = code
+        .ok()
+        .map(|Path(code)| code)
+        .filter(|code| !code.is_empty() && code.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|code| code.parse::<u16>().ok())
+        .filter(|code| (100..=599).contains(code))
+        .and_then(|code| StatusCode::from_u16(code).ok())
+        .unwrap_or(StatusCode::BAD_REQUEST);
+    (status, Json(build_mirror(&method, &uri, &headers, &body)))
 }
 
 /// Build the Mirror: the request as it arrived; `payment` is the connector's attribution, else `null`.
-async fn mirror(method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Json<Value> {
+fn build_mirror(method: &Method, uri: &Uri, headers: &HeaderMap, body: &Bytes) -> Value {
     // A header sent more than once keeps every value, joined as HTTP allows.
     let mut header_map = Map::new();
     for name in headers.keys() {
@@ -51,14 +78,14 @@ async fn mirror(method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Js
         }
         _ => Value::Null,
     };
-    Json(json!({
+    json!({
         "request": {
             "method": method.as_str(),
             "path": path,
             "headers": header_map,
-            "body": String::from_utf8_lossy(&body),
+            "body": String::from_utf8_lossy(body),
             "body_encoding": "utf8",
         },
         "payment": payment,
-    }))
+    })
 }
