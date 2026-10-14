@@ -19,9 +19,7 @@ each paid packet with a Mirror: the request as it arrived, and the payment as it
 
 ### Install
 
-```sh
-curl -fsSL https://toon.ar.io/install.sh | sh
-```
+`curl -fsSL https://toon.ar.io/install.sh | sh`
 
 </div>
 
