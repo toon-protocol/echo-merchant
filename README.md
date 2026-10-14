@@ -1,13 +1,124 @@
+<div align="center">
+
+<img src="docs/assets/toon-icon.svg" alt="TOON icon" width="160">
+
 # Echo Merchant
 
-**A priced route on the TOON devnet that anyone can pay, and that answers by showing you what it
-received.** Prove your payer works before you risk money on someone else's product.
+**Run a route that anyone can pay, and that shows each payer exactly what arrived.**
 
-Every other priced route on devnet sells something real, so when a payment fails you cannot tell
-a broken payer from a broken service. The Echo Merchant sells nothing. It answers each paid packet
-with a **Mirror**: the request as it arrived, and the payment as it arrived.
+*It sells nothing, on purpose.* Payers pay it to prove their payment flow works. It answers
+each paid packet with a Mirror: the request as it arrived, and the payment as it arrived.
 
-| | |
+[![CI](https://img.shields.io/github/actions/workflow/status/toon-protocol/echo-merchant/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/toon-protocol/echo-merchant/actions/workflows/ci.yml)
+[![Image](https://img.shields.io/github/actions/workflow/status/toon-protocol/echo-merchant/publish-image.yml?branch=main&style=flat-square&label=image&color=c9a24a)](https://github.com/toon-protocol/echo-merchant/actions/workflows/publish-image.yml)
+[![Reach](https://img.shields.io/badge/reach-hidden%20service%20%7C%20clearnet-lightgrey?style=flat-square)](docs/guide/running.md)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-b7410e?style=flat-square)](https://www.rust-lang.org)
+
+[**Run it**](docs/guide/running.md) · [**Deploy a box**](deploy/README.md) · [**Pay it**](docs/guide/echo-flow.md) · [**Pay from code**](docs/guide/paying-with-toon-client.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
+
+</div>
+
+---
+
+## Install
+
+The Echo Merchant runs behind an agent node, and [`toon`](https://github.com/toon-protocol/toon_cli)
+is the command line that runs one.
+
+```sh
+curl -fsSL https://toon.ar.io/install.sh | sh
+```
+
+## Three steps
+
+**1. Create the agent node.** It is a hidden service unless you name a hostname.
+
+```sh
+toon init --network devnet --accept-anyone-terms     # or --clearnet <hostname>
+```
+
+**2. Fund it and start it.**
+
+```sh
+toon wallet fund                                     # mock USDC from the faucet
+toon up
+```
+
+**3. Put the Echo Merchant behind its connector.** Payers can then pay it.
+
+```sh
+toon add echo --to relay --image ghcr.io/toon-protocol/echo-merchant:release \
+  --env ECHO_MERCHANT_ADDR=0.0.0.0:3100 --price 1 --yes
+```
+
+This skips the passphrase file and the gas it settles with.
+[Running the Echo Merchant](docs/guide/running.md) has every step, and how a payer reaches
+it. The devnet's own, at `g.toon.echo`, runs from [`deploy/`](deploy/README.md).
+
+## What holds
+
+- **It holds nothing of yours.** The app is one axum router with no keys and no state, in
+  an image with no shell.
+- **It never invents a payment.** `payment` is what the connector attributed the packet
+  to, and `null` when the request carried none.
+- **Hidden by default.** As a hidden service it is reached at a `.anyone` address, and
+  has no public hostname unless you give it one.
+- **Test money.** On the devnet, payers pay in mock USDC from the faucet. **MIT licence.**
+
+Below: why it is built this way, how the pieces fit, the [guides](#guides).
+
+## Why it exists
+
+Every other priced route on devnet sells something real, so when a payment fails a payer
+cannot tell a broken payer from a broken service. The Echo Merchant sells nothing.
+
+- The **Echo Merchant** is a priced route that anyone can pay, and that answers by showing
+  the payer what it received: a **Mirror**, the request as it arrived and the payment as it
+  arrived. You run it behind a connector, as a hidden service or at a clearnet hostname.
+- A **payer** is the code someone is building. It pays a packet and reads the Mirror.
+
+The Mirror is built so a payer can check its whole payment flow against it:
+
+- **The Mirror never invents a payment.** `payment` is your channel, the charge and the
+  chain, or `null` when the request carried no attribution.
+- **The Mirror loses no byte.** A body that is valid UTF-8 comes back as text; any other
+  body comes back as base64, so you can compare it byte for byte.
+- **The Mirror shows the charge, not the cost.** Compare `payment.amount` with what
+  `toon send` reports as `paid`: the gap is the hops' fees, plus what you sent above the
+  price, which the Echo Merchant's connector keeps.
+- **The Mirror comes back with any status you ask for.** `/status/503` answers 503 and a
+  Mirror, and an error answer is still paid ([status codes](docs/guide/status-codes.md)).
+
+### Why there is no refund
+
+PayAI's echo merchant charges and then refunds; this one does not. A packet's payment is
+taken up front and kept even on a reject, so a refund would be a second payment the other
+way, and nothing in an app can send one. The money you get back is your unspent deposit,
+which step 7 of [the Echo flow](docs/guide/echo-flow.md) returns. See
+[ADR 0001](docs/adr/0001-mirror-not-refund.md).
+
+## How it fits together
+
+```
+ an Echo Merchant: one connector, one app, one route
+ ┌──────────────────────────────────────────────────────────────────┐
+ │  .anyone or https ──► connector ────────► echo-merchant          │
+ │                       meters & settles    answers with a Mirror  │
+ └──────▲───────────────────────────────────────────────────┬───────┘
+        │  a paid packet                           a Mirror │
+        └──────── a payer ◄─────────────────────────────────┘
+```
+
+The **connector** meters and settles; the **Echo Merchant** behind it only answers. Behind
+an agent node, the connector is `toon`'s, reached at its `.anyone` address or through your
+own reverse proxy. On the devnet box, nginx passes `:443` to the connector on `:4000` and
+the app listens on `:3000`. A payer seals each packet to the connector's `/ilp` URL.
+[`CONTEXT.md`](CONTEXT.md) is the glossary.
+
+### The devnet's route, for reference
+
+| Property | What it is |
 | --- | --- |
 | Address | `g.toon.echo` |
 | Price | 1 base unit, plus 1 per KiB of payload |
@@ -16,152 +127,19 @@ with a **Mirror**: the request as it arrived, and the payment as it arrived.
 
 Amounts are in the token's base units; on devnet the token has 6 decimals.
 
-## The Echo flow
+## Guides
 
-Start from a machine with nothing on it. Each step is one command.
-
-**1. Install `toon` and create a wallet.** The passphrase seals the keystore; `toon` reads it
-from the file `TOON_PASSPHRASE_FILE` names.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/toon-protocol/toon_cli/main/install.sh | sh
-mkdir -p ~/.config/toon
-printf '%s\n' 'a long passphrase you keep somewhere safe' > ~/.config/toon/passphrase
-chmod 600 ~/.config/toon/passphrase
-export TOON_PASSPHRASE_FILE=~/.config/toon/passphrase
-toon init --network devnet --accept-anyone-terms     # add --solana to pay from Solana too
-```
-
-`init` prints the mnemonic once: write it down.
-[Your first agent node](https://github.com/toon-protocol/toon_cli/blob/main/docs/guide/first-agent-node.md)
-says more.
-
-**2. Fund the wallet from the faucet.**
-
-```sh
-toon wallet fund
-toon wallet balances
-```
-
-The faucet sends the mock USDC and no gas. Opening and withdrawing a channel are transactions, so
-send a little Base Sepolia ETH to the address `toon wallet show` lists, from a public faucet. A
-Solana channel needs a little devnet SOL instead.
-
-**3. Start the agent node.**
-
-```sh
-toon up
-toon status
-```
-
-**4. Open a channel.** Joining the devnet opens one, with a deposit, toward the network's hub, which
-reaches `g.toon.echo`:
-
-```sh
-toon join devnet --deposit 1000000 --yes     # add --chain evm or --chain solana to choose
-toon channel list                            # note the outbound channel's id
-```
-
-The deposit is your whole exposure. The Echo Merchant takes dust from it.
-
-**5. Pay the Echo Merchant.** The packet is sealed to the Echo Merchant's connector, so name its
-`/ilp` URL once. Every later command reads it from `ECHO_ILP_URL`.
-
-```sh
-export ECHO_ILP_URL=<the Echo Merchant connector's /ilp URL>
-toon describe "$ECHO_ILP_URL"                # its route and price, for free
-echo '{"hello":"echo"}' > body.json
-toon send g.toon.echo --amount 10 --seal-to "$ECHO_ILP_URL" --body body.json --yes --json
-```
-
-`--amount` is the most you will pay. The hub charges to forward, so send more than the price:
-`toon probe g.toon.echo --seal-to "$ECHO_ILP_URL"` reports the path's `cost` when you do not know it.
-
-**6. Read the Mirror.** It is JSON with a stable shape:
-
-```json
-{
-  "request": {
-    "method": "POST",
-    "path": "/",
-    "headers": { "content-type": "application/json" },
-    "body": "{\"hello\":\"echo\"}\n",
-    "body_encoding": "utf8"
-  },
-  "payment": { "payer": "evm:0x…", "amount": "1", "chain": "…" }
-}
-```
-
-- `request` is what arrived: method, path with query, headers, body. A body that is valid UTF-8
-  comes back as text (`"utf8"`); any other body comes back as base64 (`"base64"`), so you can compare
-  it byte for byte.
-- `payment` is what the connector attributed the packet to: your channel (`payer`), the **charge**
-  (`amount`, a string) and the `chain`. It is `null` when the request carried no attribution. The
-  Mirror never invents a payment.
-- The Mirror does not carry the price. Read it from `toon describe`.
-
-**The charge is not what you signed for.** `payment.amount` is the **charge**, what this route's
-price comes to for this packet: 1, plus 1 per KiB. The **cost** is what you signed for, the
-`--amount` the packet was paid with. The cost minus the charge is the **fees** the hops between you
-and the Echo Merchant took. `toon send` reports the cost as `paid`; compare it with
-`payment.amount` to see where your value went. Send a larger body and watch the charge grow.
-
-**7. Withdraw the channel's collateral.** Take the channel id from `toon channel list`:
-
-```sh
-toon channel withdraw <id>
-toon channel list
-```
-
-The unspent deposit returns to your wallet. See [Withdrawing](#withdrawing) first.
-
-## Withdrawing
-
-`toon channel withdraw` starts or finishes a withdrawal, "the chain decides which". **On EVM
-withdrawing is two steps with a delay between them**: the first run starts it, and after the
-chain's delay you run the same command again to finish it. Until then the deposit has not
-returned; the first run did not fail. `toon channel list` shows the channel's status.
-
-## `/status/{code}`
-
-Ask for a status of your choosing, to test how your payer handles a paid packet whose answer is an
-error:
-
-```sh
-toon send g.toon.echo --amount 10 --path /status/503 --seal-to "$ECHO_ILP_URL" --yes --json
-```
-
-The answer carries status 503 and a Mirror. **An error answer is still paid:** the connector
-fulfils any HTTP answer, and a packet's payment is taken up front. A `code` that is not a status
-the stack can send with a Mirror (non-numeric, outside 200 to 599, or `204` and `304`, whose
-bodies HTTP drops) answers 400 with a Mirror. Any other path is mirrored with status 200.
-
-## Failures you must handle
-
-The connector produces these, never the app. Each takes one command. No `toon` command sends
-unpaid: `toon probe` answers with a reject that states the path's cost, not the greeting.
-
-| You see | One command |
+| Guide | What it walks through |
 | --- | --- |
-| The **greeting**: the route's terms, instead of the work | `curl -si -X POST "$ECHO_ILP_URL"`, a request with no voucher, answered `402` |
-| `F03`, an underpayment | `toon send g.toon.echo --amount 1 --body big.bin --seal-to "$ECHO_ILP_URL" --yes`, with `big.bin` a few KiB, so the price is above 1 |
-| `F02`, no route | `toon send g.toon.nowhere --amount 10 --yes` |
+| [Running the Echo Merchant](docs/guide/running.md) | An agent node as a hidden service or at a clearnet hostname, `toon add` with the image, the price, a payer peering with it, the sandbox |
+| [Deploying a box](deploy/README.md) | The devnet's Echo Merchant: a connector and the app behind nginx, from `bootstrap.sh` |
+| [The Echo flow](docs/guide/echo-flow.md) | Install, fund, open a channel, pay, read the Mirror, the charge against the cost, and withdrawing |
+| [Paying with toon-client](docs/guide/paying-with-toon-client.md) | The payer library and CLI against the Echo Merchant: an identity, a channel, a paid request, a status, the greeting, leaving, from code, and a hidden service |
+| [`/status/{code}`](docs/guide/status-codes.md) | Asking for an error status, what is still paid, and which codes answer 400 |
+| [Failures you must handle](docs/guide/failures.md) | The greeting, an underpayment (`F03`), no route (`F02`), and reading a reject |
 
-A rejected `toon send` exits 1 and reports the code in `reject.code`. A reject that states a cost
-reports `cost` and `complete`; send that as `--amount`.
+## Reference
 
-## Why there is no refund
-
-PayAI's echo merchant charges and then refunds; this one does not. A packet's payment is taken up
-front and kept even on a reject, so a refund would be a second payment the other way, and nothing in
-an app can send one. The money you get back is your unspent deposit, which step 7 returns. See
-[ADR 0001](docs/adr/0001-mirror-not-refund.md).
-
-## Development
-
-```sh
-cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
-```
-
-The app is one axum router and holds no keys and no state. [`CONTEXT.md`](CONTEXT.md) is the
-glossary.
+- [`CONTEXT.md`](CONTEXT.md): the glossary, Mirror, Echo flow and refund.
+- [`docs/adr/`](docs/adr/): the decisions behind the design, and why.
+- [`docs/development.md`](docs/development.md): the checks, and how the image is published.
