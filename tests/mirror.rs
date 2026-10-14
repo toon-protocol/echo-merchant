@@ -41,3 +41,21 @@ async fn payment_is_null() {
     assert!(mirror["payment"].is_null());
     assert!(mirror.as_object().unwrap().contains_key("payment"));
 }
+
+#[tokio::test]
+async fn repeated_header_keeps_every_value() {
+    let request = Request::builder()
+        .uri("/")
+        .header("accept", "text/plain")
+        .header("accept", "application/json")
+        .body(Body::empty())
+        .unwrap();
+    let response = echo_merchant::router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), 200);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let mirror: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        mirror["request"]["headers"]["accept"],
+        "text/plain, application/json"
+    );
+}
