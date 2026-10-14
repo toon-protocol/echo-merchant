@@ -1,9 +1,13 @@
-# Running your own Echo Merchant
+# Running the Echo Merchant
 
-The Echo Merchant at `g.toon.echo` on the devnet runs from
-[`deploy/`](../../deploy/README.md). This page runs a copy of your own behind an agent node,
-with `toon`: as a **hidden service**, the default, or at a **clearnet** hostname. Use it to
-test a payer on the sandbox, or against a merchant only you can reach.
+There are two ways to run it:
+
+- **Behind an agent node**, with `toon`: as a **hidden service**, the default, or at a
+  **clearnet** hostname. This page. Use it to give payers an Echo Merchant of your own, on
+  the devnet or the sandbox.
+- **As a box of its own**, a connector and the app behind nginx, which is how the devnet's
+  Echo Merchant at `g.toon.echo` runs. [`deploy/README.md`](../../deploy/README.md) is that
+  guide.
 
 It needs `toon` 0.2.0 or later, for `toon add --env`, and Docker, which runs the image.
 
