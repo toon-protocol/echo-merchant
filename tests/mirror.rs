@@ -120,3 +120,40 @@ async fn partial_attribution_gives_null_payment_and_hides_headers() {
         assert_no_attribution_headers(&mirror);
     }
 }
+
+async fn mirror_of_bytes(body: Vec<u8>) -> Value {
+    let request = Request::builder()
+        .method("POST")
+        .uri("/")
+        .body(Body::from(body))
+        .unwrap();
+    let response = echo_merchant::router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), 200);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+#[tokio::test]
+async fn non_utf8_body_comes_back_as_base64_of_exact_bytes() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let sent = vec![0xff, 0xfe, 0x00, 0x80, 0xc0, 0x41];
+    let mirror = mirror_of_bytes(sent.clone()).await;
+    let request = &mirror["request"];
+    assert_eq!(request["body_encoding"], "base64");
+    let decoded = STANDARD.decode(request["body"].as_str().unwrap()).unwrap();
+    assert_eq!(decoded, sent);
+}
+
+#[tokio::test]
+async fn multibyte_utf8_body_comes_back_as_text() {
+    let mirror = mirror_of_bytes("héllo 世界 🦀".as_bytes().to_vec()).await;
+    assert_eq!(mirror["request"]["body"], "héllo 世界 🦀");
+    assert_eq!(mirror["request"]["body_encoding"], "utf8");
+}
+
+#[tokio::test]
+async fn empty_body_comes_back_as_empty_text() {
+    let mirror = mirror_of_bytes(Vec::new()).await;
+    assert_eq!(mirror["request"]["body"], "");
+    assert_eq!(mirror["request"]["body_encoding"], "utf8");
+}
