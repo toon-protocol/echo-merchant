@@ -20,16 +20,21 @@ Amounts are in the token's base units; on devnet the token has 6 decimals.
 
 Start from a machine with nothing on it. Each step is one command.
 
-**1. Install `toon` and create a wallet.**
+**1. Install `toon` and create a wallet.** The passphrase seals the keystore; `toon` reads it
+from the file `TOON_PASSPHRASE_FILE` names.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/toon-protocol/toon_cli/main/install.sh | sh
+mkdir -p ~/.config/toon
+printf '%s\n' 'a long passphrase you keep somewhere safe' > ~/.config/toon/passphrase
+chmod 600 ~/.config/toon/passphrase
+export TOON_PASSPHRASE_FILE=~/.config/toon/passphrase
 toon init --network devnet --accept-anyone-terms     # add --solana to pay from Solana too
 ```
 
-`init` needs a passphrase file first, and prints the mnemonic once: write it down.
+`init` prints the mnemonic once: write it down.
 [Your first agent node](https://github.com/toon-protocol/toon_cli/blob/main/docs/guide/first-agent-node.md)
-shows both.
+says more.
 
 **2. Fund the wallet from the faucet.**
 
@@ -59,10 +64,12 @@ toon channel list                            # note the outbound channel's id
 
 The deposit is your whole exposure. The Echo Merchant takes dust from it.
 
-**5. Pay the Echo Merchant.** The packet is sealed to the Echo Merchant's connector, so give its `/ilp`
-URL. `toon describe "$ECHO_ILP_URL"` shows its route and price first, for free.
+**5. Pay the Echo Merchant.** The packet is sealed to the Echo Merchant's connector, so name its
+`/ilp` URL once. Every later command reads it from `ECHO_ILP_URL`.
 
 ```sh
+export ECHO_ILP_URL=<the Echo Merchant connector's /ilp URL>
+toon describe "$ECHO_ILP_URL"                # its route and price, for free
 echo '{"hello":"echo"}' > body.json
 toon send g.toon.echo --amount 10 --seal-to "$ECHO_ILP_URL" --body body.json --yes --json
 ```
@@ -96,8 +103,8 @@ toon send g.toon.echo --amount 10 --seal-to "$ECHO_ILP_URL" --body body.json --y
 **The charge is not what you signed for.** `payment.amount` is the **charge**, what this route's
 price comes to for this packet: 1, plus 1 per KiB. The **cost** is what you signed for, the
 `--amount` the packet was paid with. The cost minus the charge is the **fees** the hops between you
-and the Echo Merchant took. `toon send` reports the cost as `paid` for a rejected packet; compare it
-with `payment.amount` to see where your value went. Send a larger body and watch the charge grow.
+and the Echo Merchant took. `toon send` reports the cost as `paid`; compare it with
+`payment.amount` to see where your value went. Send a larger body and watch the charge grow.
 
 **7. Withdraw the channel's collateral.** Take the channel id from `toon channel list`:
 
@@ -131,11 +138,12 @@ bodies HTTP drops) answers 400 with a Mirror. Any other path is mirrored with st
 
 ## Failures you must handle
 
-The connector produces these, never the app. Each takes one command.
+The connector produces these, never the app. Each takes one command. No `toon` command sends
+unpaid: `toon probe` answers with a reject that states the path's cost, not the greeting.
 
 | You see | One command |
 | --- | --- |
-| The **greeting**: the route's terms, instead of the work | `toon probe g.toon.echo --seal-to "$ECHO_ILP_URL"`, which sends nothing paid |
+| The **greeting**: the route's terms, instead of the work | `curl -si -X POST "$ECHO_ILP_URL"`, a request with no voucher, answered `402` |
 | `F03`, an underpayment | `toon send g.toon.echo --amount 1 --body big.bin --seal-to "$ECHO_ILP_URL" --yes`, with `big.bin` a few KiB, so the price is above 1 |
 | `F02`, no route | `toon send g.toon.nowhere --amount 10 --yes` |
 
