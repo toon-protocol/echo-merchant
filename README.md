@@ -23,6 +23,10 @@ each paid packet with a Mirror: the request as it arrived, and the payment as it
 
 ## Install
 
+The Echo Merchant runs behind an agent node, and [`toon`](https://github.com/toon-protocol/toon_cli)
+is the command line that runs one. This installs it: the release for this machine, checked
+against its `SHA256SUMS`, into `~/.local/bin`.
+
 ```sh
 curl -fsSL https://toon.ar.io/install.sh | sh
 ```
