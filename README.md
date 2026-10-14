@@ -17,10 +17,6 @@ each paid packet with a Mirror: the request as it arrived, and the payment as it
 
 [**Run it**](docs/guide/running.md) · [**Deploy a box**](deploy/README.md) · [**Pay it**](docs/guide/echo-flow.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/toon-protocol/toon_cli/main/install.sh | sh
-```
-
 </div>
 
 ---
@@ -31,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/toon-protocol/toon_cli/main/install
 hostname.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/toon-protocol/toon_cli/main/install.sh | sh
+curl -fsSL https://toon.ar.io/install.sh | sh
 toon init --network devnet --accept-anyone-terms     # or --clearnet <hostname>
 ```
 
