@@ -1,15 +1,21 @@
 name: Publish image
 
 # Builds the Echo Merchant image and pushes it to GHCR. `release` is the moving
-# tag the fleet's Watchtower watches, so only a published, non-prerelease
-# release moves it; a manual run publishes only its immutable sha tag.
+# tag the fleet's Watchtower watches, so a merge to main reaches devnet without
+# a manual deploy. `latest` carries the same digest. Both are enabled only on
+# the default branch, so a tag push or a manual run off main never moves them.
+# Every build also pushes an immutable sha tag, which is what a rollback pins to.
+# A `v*` tag push adds semver tags. Single-arch (amd64): the devnet boxes are x86.
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
-concurrency: publish-image-${{ github.ref }}
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -34,12 +40,15 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=release,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=release,enable={{is_default_branch}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha
       - uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
