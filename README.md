@@ -15,7 +15,7 @@ each paid packet with a Mirror: the request as it arrived, and the payment as it
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-b7410e?style=flat-square)](https://www.rust-lang.org)
 
-[**Run it**](docs/guide/running.md) · [**Deploy a box**](deploy/README.md) · [**Pay it**](docs/guide/echo-flow.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
+[**Run it**](docs/guide/running.md) · [**Deploy a box**](deploy/README.md) · [**Pay it**](docs/guide/echo-flow.md) · [**Pay from code**](docs/guide/paying-with-toon-client.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
 
 </div>
 
@@ -134,6 +134,7 @@ Amounts are in the token's base units; on devnet the token has 6 decimals.
 | [Running the Echo Merchant](docs/guide/running.md) | An agent node as a hidden service or at a clearnet hostname, `toon add` with the image, the price, a payer peering with it, the sandbox |
 | [Deploying a box](deploy/README.md) | The devnet's Echo Merchant: a connector and the app behind nginx, from `bootstrap.sh` |
 | [The Echo flow](docs/guide/echo-flow.md) | Install, fund, open a channel, pay, read the Mirror, the charge against the cost, and withdrawing |
+| [Paying with toon-client](docs/guide/paying-with-toon-client.md) | The payer library and CLI against the Echo Merchant: an identity, a channel, a paid request, a status, the greeting, leaving, from code, and a hidden service |
 | [`/status/{code}`](docs/guide/status-codes.md) | Asking for an error status, what is still paid, and which codes answer 400 |
 | [Failures you must handle](docs/guide/failures.md) | The greeting, an underpayment (`F03`), no route (`F02`), and reading a reject |
 

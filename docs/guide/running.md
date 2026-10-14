@@ -63,7 +63,8 @@ add it with `--price 2` and send `--amount 1`.
 
 ## 4. Pay it
 
-A payer peers with your connector directly, then sends to the app's address:
+With [toon-client](paying-with-toon-client.md), a payer pays your connector directly. With
+`toon`, a payer peers with your connector, then sends to the app's address:
 
 ```sh
 export ECHO_ILP_URL=<your connector's /ilp URL>
