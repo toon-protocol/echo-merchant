@@ -36,7 +36,7 @@ async fn mirrors_each_method_path_headers_and_body() {
 }
 
 #[tokio::test]
-async fn payment_is_null() {
+async fn payment_is_null_without_attribution() {
     let mirror = mirror_of("POST", "/x", "data").await;
     assert!(mirror["payment"].is_null());
     assert!(mirror.as_object().unwrap().contains_key("payment"));
@@ -58,4 +58,65 @@ async fn repeated_header_keeps_every_value() {
         mirror["request"]["headers"]["accept"],
         "text/plain, application/json"
     );
+}
+
+async fn mirror_with(headers: &[(&str, &str)]) -> Value {
+    let mut builder = Request::builder().uri("/");
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    let response = echo_merchant::router()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+fn assert_no_attribution_headers(mirror: &Value) {
+    assert!(mirror["request"]["headers"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .all(|name| !name.to_lowercase().starts_with("x-toon-")));
+}
+
+#[tokio::test]
+async fn all_three_attribution_headers_give_payment() {
+    let mirror = mirror_with(&[
+        ("X-TOON-Payer", "evm:0xabc"),
+        ("x-toon-amount", "123456789012345678901234567890"),
+        ("X-Toon-Chain", "evm:31337"),
+    ])
+    .await;
+    assert_eq!(mirror["payment"]["payer"], "evm:0xabc");
+    assert!(mirror["payment"]["amount"].is_string());
+    assert_eq!(
+        mirror["payment"]["amount"],
+        "123456789012345678901234567890"
+    );
+    assert_eq!(mirror["payment"]["chain"], "evm:31337");
+    assert_no_attribution_headers(&mirror);
+}
+
+#[tokio::test]
+async fn no_attribution_gives_null_payment() {
+    assert!(mirror_with(&[("x-probe", "1")]).await["payment"].is_null());
+}
+
+#[tokio::test]
+async fn partial_attribution_gives_null_payment_and_hides_headers() {
+    for headers in [
+        &[("X-TOON-Payer", "evm:0xabc"), ("x-toon-amount", "5")][..],
+        &[
+            ("x-toon-payer", "solana:abc"),
+            ("X-Toon-Chain", "solana:devnet"),
+        ][..],
+        &[("X-TOON-AMOUNT", "5")][..],
+    ] {
+        let mirror = mirror_with(headers).await;
+        assert!(mirror["payment"].is_null());
+        assert_no_attribution_headers(&mirror);
+    }
 }
