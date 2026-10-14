@@ -1,9 +1,15 @@
 name: Publish image
 
+# Builds the Echo Merchant image and pushes it to GHCR. `release` is the moving
+# tag the fleet's Watchtower watches, so only a published, non-prerelease
+# release moves it; a manual run publishes only its immutable sha tag.
+
 on:
   release:
     types: [published]
   workflow_dispatch:
+
+concurrency: publish-image-${{ github.ref }}
 
 permissions:
   contents: read
@@ -28,7 +34,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=release
+            type=raw,value=release,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
             type=sha
       - uses: docker/build-push-action@v6
