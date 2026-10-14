@@ -17,10 +17,8 @@ each paid packet with a Mirror: the request as it arrived, and the payment as it
 
 [**Run it**](docs/guide/running.md) · [**Deploy a box**](deploy/README.md) · [**Pay it**](docs/guide/echo-flow.md) · [**Failures**](docs/guide/failures.md) · [**Guides**](#guides) · [**Development**](docs/development.md)
 
-### Install
-
 ```sh
-curl -fsSL https://toon.ar.io/install.sh | sh     # toon, checked against SHA256SUMS, into ~/.local/bin
+curl -fsSL https://toon.ar.io/install.sh | sh     # install
 ```
 
 </div>
