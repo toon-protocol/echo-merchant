@@ -7,6 +7,7 @@ use axum::{
     routing::any,
     Json, Router,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::{json, Map, Value};
 
 /// Prefix of the headers the connector adds to attribute a paid delivery.
@@ -87,13 +88,18 @@ fn build_mirror(method: &Method, uri: &Uri, headers: &HeaderMap, body: &Bytes) -
         }
         _ => Value::Null,
     };
+    // Valid UTF-8 comes back as text; anything else as base64, so no byte is lost.
+    let (body, body_encoding) = match std::str::from_utf8(body) {
+        Ok(text) => (text.to_owned(), "utf8"),
+        Err(_) => (STANDARD.encode(body), "base64"),
+    };
     json!({
         "request": {
             "method": method.as_str(),
             "path": path,
             "headers": header_map,
-            "body": String::from_utf8_lossy(body),
-            "body_encoding": "utf8",
+            "body": body,
+            "body_encoding": body_encoding,
         },
         "payment": payment,
     })
