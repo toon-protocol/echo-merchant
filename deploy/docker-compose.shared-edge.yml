@@ -1,0 +1,61 @@
+# =============================================================================
+# The shared-edge overlay
+# =============================================================================
+# On the shared devnet host one Caddy edge owns ports 80 and 443. This node
+# keeps its own connector, keys and hostnames; only its own TLS front goes away.
+#
+# Turned on with one line in .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.shared-edge.yml
+#
+# What it does:
+#
+#   nginx, certbot, watchtower   DISABLED (`profiles: [disabled]`, a profile
+#                                 nothing ever activates). auto-apply.sh already
+#                                 pulls the pinned images unattended.
+#   connector                    joins the external `edge-echo` network under
+#                                 the alias `echo-proxy`, so the edge reaches
+#                                 it at `echo-proxy:4000` for proxy.echo.${DOMAIN}.
+#                                 Its loopback publish MOVES to 127.0.0.1:4005
+#                                 (`ports: !override`) so it does not collide
+#                                 with the other nodes on the host. The port is
+#                                 this node's assignment in the infra ticket.
+#   echo-merchant                never published or aliased anywhere.
+#
+# `edge-echo` is this node's OWN network: the edge project creates one per node
+# and Caddy joins them all, so no node can reach another's connector.
+#
+# `networks: default: {}` is repeated on the connector because ADDING an
+# explicit `networks:` key to a service REPLACES the implicit default network,
+# which would cut the connector off from echo-merchant.
+# =============================================================================
+
+services:
+  connector:
+    mem_limit: 64m
+    networks:
+      default: {}
+      edge-echo:
+        aliases: [echo-proxy]
+    ports: !override
+      - '127.0.0.1:4005:4000'
+
+  echo-merchant:
+    mem_limit: 32m
+
+  nginx:
+    mem_limit: 32m
+    profiles: [disabled]
+
+  certbot:
+    mem_limit: 32m
+    profiles: [disabled]
+
+  watchtower:
+    mem_limit: 64m
+    profiles: [disabled]
+
+networks:
+  # Created and owned by the edge project; this node only joins it.
+  edge-echo:
+    external: true

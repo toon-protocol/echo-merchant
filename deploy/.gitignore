@@ -1,0 +1,16 @@
+# Secrets and rendered output. Only the templates are committed.
+.env
+.env.*
+!.env.example
+connector.toml
+# The last commit auto-apply.sh applied AND verified (TOON_Network#164).
+.applied
+operator-bearer.token
+operator-write.keys
+nginx/conf.d/
+*.key
+*.secret
+
+# The fingerprint of the inputs the running connector last started on
+# (toon-protocol/relay#173); auto-apply.sh restarts it when they change.
+.connector-inputs
