@@ -35,6 +35,10 @@ export PATH=$HOME/.local/bin:$PATH
 GAS_AMOUNT=${GAS_AMOUNT:-0.002ether}
 EVM_RPC=${EVM_RPC:-https://sepolia.base.org}
 EXPLORER=https://sepolia.basescan.org/tx
+# The devnet hub. RELAY_SSH (unset by default) is its operator's login: with
+# it, the demo also peers the hub toward the provider and pays through it.
+HUB_URL=${HUB_URL:-https://proxy.relay.devnet.toonprotocol.dev}
+RELAY_DEPLOY_DIR=${RELAY_DEPLOY_DIR:-/root/relay/deploy}
 X402_CONTRACT=0x4020074e9dF2ce1deE5A9C1b5c3f541D02a10003   # x402BatchSettlement
 
 # linode-cli reads LINODE_CLI_TOKEN. Map LINODE_ACCESS_TOKEN onto it in the
