@@ -5,6 +5,8 @@
 #   ./demo.sh up         start the provider VM and the Linode payer
 #   ./demo.sh provider   install toon in the VM, fund it, start it, add the Echo Merchant
 #   ./demo.sh pay        from the Linode: describe, fund, open a channel, pay
+#   ./demo.sh hop        from the provider: pay a devnet route hop by hop, through the hub
+#   ./demo.sh settle     land the payer's voucher on Base Sepolia
 #   ./demo.sh evidence   what listens in the VM, and a port scan of the home from the Linode
 #   ./demo.sh down       delete the Linode and the VM
 #
@@ -36,9 +38,14 @@ cmd_provider() {
 
     say "Provider: fund it from the devnet faucet and start it"
     vm 'toon wallet fund 2>&1 | head -3'
+    fund_gas
     vm 'toon up'
     vm_quiet 'for i in $(seq 60); do toon status >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1' >/dev/null
     vm 'toon status'
+
+    say "Provider: join the devnet. A peering toward its hub, with a deposit"
+    vm 'toon join devnet --deposit 1000000 --yes'
+    vm 'toon peer list'
 
     say "Provider: put the Echo Merchant behind the connector, at price 2"
     vm "toon add echo --to relay --image $ECHO_IMAGE --env ECHO_MERCHANT_ADDR=0.0.0.0:3100 --price 2 --yes"
@@ -74,6 +81,57 @@ cmd_pay() {
     vm 'toon channel list'
 }
 
+fund_gas() {
+    local addr; addr=$(vm_quiet 'jq -r ".wallet.chains.evm[0].address" ~/init.json')
+    say "Provider: Base Sepolia ETH for the settlement key's gas (toon_cli#255)"
+    if [ -n "${GAS_FUNDER_MNEMONIC:-}" ]; then
+        command -v cast >/dev/null || die "GAS_FUNDER_MNEMONIC needs foundry's cast"
+        side 'host$' "cast send --mnemonic \"\$GAS_FUNDER_MNEMONIC\" --value $GAS_AMOUNT $addr"
+        local tx
+        tx=$(cast send --mnemonic "$GAS_FUNDER_MNEMONIC" --rpc-url "$EVM_RPC" --value "$GAS_AMOUNT" "$addr" --json |
+            python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["transactionHash"], r["status"])')
+        echo "funding tx ${tx% *} (status ${tx#* })"
+        echo "$EXPLORER/${tx% *}"
+        echo "${tx% *}" >> "$STATE/funding-txs"
+    else
+        echo "Send Base Sepolia ETH ($GAS_AMOUNT) to $addr from a public faucet. Waiting for it."
+    fi
+    local i
+    for i in $(seq 1 360); do
+        [ "$(cast balance "$addr" --rpc-url "$EVM_RPC" 2>/dev/null || echo 0)" != 0 ] && break
+        sleep 5
+    done
+    echo "$addr holds $(cast balance "$addr" --ether --rpc-url "$EVM_RPC") ETH"
+}
+
+cmd_hop() {
+    say "Provider: pay a devnet route from behind NAT, hop by hop: this node, the devnet relay, the gas station"
+    vm 'echo "{\"hello\":\"from behind NAT\"}" > ~/body.json; toon probe g.toon.relay.gas --seal-to https://proxy.gas.devnet.toonprotocol.dev/ilp'
+    vm 'toon send g.toon.relay.gas --amount 1001 --seal-to https://proxy.gas.devnet.toonprotocol.dev/ilp --body ~/body.json --yes'
+    vm 'toon channel list | grep outbound'
+}
+
+cmd_settle() {
+    local id; id=$(vm_quiet 'toon channel list' | awk '/ inbound /{print $1; exit}')
+    say "Provider: land the payer's voucher on Base Sepolia now, instead of at the next ten-minute sweep"
+    vm "toon channel land $id" || true
+    vm 'toon channel list | grep inbound'
+    # toon channel land prints no transaction hash, so read it off the chain: the
+    # claim the provider's settlement key sent to x402BatchSettlement for this channel.
+    local from tx b
+    from=$(vm_quiet 'jq -r ".wallet.chains.evm[0].address" ~/init.json' | tr 'A-F' 'a-f')
+    b=$(cast block-number --rpc-url "$EVM_RPC")
+    for tx in $(cast logs --rpc-url "$EVM_RPC" --address "$X402_CONTRACT" --from-block $((b - 300)) --to-block "$b" --json |
+        jq -r --arg ch "$id" '.[] | select((.topics | map(ascii_downcase) | index($ch)) or (.data | ascii_downcase | contains($ch[2:]))) | .transactionHash' | sort -u); do
+        if [ "$(cast tx "$tx" from --rpc-url "$EVM_RPC" | tr 'A-F' 'a-f')" = "$from" ]; then
+            side 'host$' "the claim on Base Sepolia, from the provider's settlement key"
+            echo "$tx  $(cast 4byte "$(cast tx "$tx" input --rpc-url "$EVM_RPC" | cut -c1-10)" | cut -d'(' -f1)"
+            echo "$EXPLORER/$tx"
+            echo "$tx" > "$STATE/settle-tx"
+        fi
+    done
+}
+
 cmd_evidence() {
     say "Provider VM: every listening TCP socket. All on loopback"
     side 'provider-vm#' 'ss -tlnp'
@@ -103,10 +161,12 @@ cmd_run() {
     cmd_up
     cmd_provider
     cmd_pay
+    cmd_settle
+    cmd_hop
     cmd_evidence
 }
 
 case ${1:-} in
-    up | provider | pay | evidence | down | run) "cmd_$1" ;;
-    *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    up | provider | pay | hop | settle | evidence | down | run) "cmd_$1" ;;
+    *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

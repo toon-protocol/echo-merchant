@@ -26,6 +26,17 @@ ECHO_IMAGE=${ECHO_IMAGE:-ghcr.io/toon-protocol/echo-merchant:release}
 
 export PATH=$HOME/.local/bin:$PATH
 
+# Base Sepolia ETH for the provider's settlement key. A fresh agent node needs
+# gas to join the devnet and to land what it is paid (toon_cli#255). Set
+# GAS_FUNDER_MNEMONIC to a Base Sepolia wallet's mnemonic and the demo sends
+# GAS_AMOUNT from it with foundry's `cast`; the mnemonic is read from the
+# environment and never printed. Unset, the demo prints the address and waits
+# for you to fund it from a public faucet.
+GAS_AMOUNT=${GAS_AMOUNT:-0.002ether}
+EVM_RPC=${EVM_RPC:-https://sepolia.base.org}
+EXPLORER=https://sepolia.basescan.org/tx
+X402_CONTRACT=0x4020074e9dF2ce1deE5A9C1b5c3f541D02a10003   # x402BatchSettlement
+
 # linode-cli reads LINODE_CLI_TOKEN. Map LINODE_ACCESS_TOKEN onto it in the
 # child's environment only; the token is never printed.
 lin() {
