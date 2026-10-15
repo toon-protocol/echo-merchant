@@ -137,6 +137,7 @@ Amounts are in the token's base units; on devnet the token has 6 decimals.
 | [Paying with toon-client](docs/guide/paying-with-toon-client.md) | The payer library and CLI against the Echo Merchant: an identity, a channel, a paid request, a status, the greeting, leaving, from code, and a hidden service |
 | [`/status/{code}`](docs/guide/status-codes.md) | Asking for an error status, what is still paid, and which codes answer 400 |
 | [Failures you must handle](docs/guide/failures.md) | The greeting, an underpayment (`F03`), no route (`F02`), and reading a reject |
+| [Behind NAT, paid from another network](demo/behind-nat/README.md) | A demo that builds a VM behind NAT and a Linode, pays the Echo Merchant from the Linode through the Anyone overlay, scans for an open port and deletes both |
 
 ## Reference
 
