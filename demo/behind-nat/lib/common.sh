@@ -36,7 +36,8 @@ GAS_AMOUNT=${GAS_AMOUNT:-0.002ether}
 EVM_RPC=${EVM_RPC:-https://sepolia.base.org}
 EXPLORER=https://sepolia.basescan.org/tx
 # The devnet connector. RELAY_SSH (unset by default) is its operator's login:
-# with it, the demo also peers the connector toward the provider and pays through it.
+# with it, the demo also peers the connector toward the provider and pays
+# through it.
 HUB_URL=${HUB_URL:-https://toonprotocol.dev}
 RELAY_DEPLOY_DIR=${RELAY_DEPLOY_DIR:-/root/relay/deploy}
 X402_CONTRACT=0x4020074e9dF2ce1deE5A9C1b5c3f541D02a10003   # x402BatchSettlement

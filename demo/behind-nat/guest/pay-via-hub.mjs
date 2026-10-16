@@ -2,10 +2,11 @@
 //
 //   node pay-via-hub.mjs <connector URL> <destination> <seal key> <message>
 //
-// The payer opens a channel to the devnet connector at its public https URL and pays it.
-// The connector forwards the packet over the Anyone overlay to the agent node behind
-// NAT. The request is sealed to that node's connector key, so the connector carries
-// it and cannot read it. The payer needs no anon daemon of its own.
+// The payer opens a channel to the devnet connector at its public https URL
+// and pays it. The devnet connector forwards the packet over the Anyone overlay
+// to the agent node behind NAT. The request is sealed to that node's seal key,
+// so the devnet connector carries it and cannot read it. The payer needs no
+// anon daemon of its own.
 //
 // Its wallet is a mnemonic made here, kept in a 0600 file beside this script,
 // and never printed.

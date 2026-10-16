@@ -64,11 +64,11 @@ export RELAY_SSH=root@<the devnet relay's host>   # only the relay's operator ha
 Without `GAS_FUNDER_MNEMONIC` the demo prints the provider's address and waits until you
 fund it from a public Base Sepolia faucet.
 
-The `hub` and `pay-hub` steps need the devnet relay's operator: peering the relay toward a new node is a
-signed write on its operator surface. Without `RELAY_SSH` the demo skips `hub` and
-`pay-hub` and runs the rest, the direct payment over the overlay included. To try that
-path on a node of your own, ask in the TOON community for a peering, or run a relay with
-[the same bundle](https://github.com/toon-protocol/relay/tree/main/deploy).
+Paying through the devnet connector needs the relay's operator: peering the relay toward a
+new node is a signed write on its operator surface. Without `RELAY_SSH` the demo skips `hub`
+and `pay-hub` and runs the rest, the direct payment over the overlay included. To pay through
+the connector from a node of your own, ask in the TOON community for a peering, or run a
+relay with [the same bundle](https://github.com/toon-protocol/relay/tree/main/deploy).
 
 `run` is `up`, `provider`, `hub`, `pay-hub`, `pay`, `settle`, `hop` and `evidence` in order,
 then `down`, which runs even when a step fails. Each step also runs on its own.
@@ -189,8 +189,8 @@ the relay no longer peers toward demo-0206ab32151f7edb or routes g.toon.0206ab32
 - Nothing listened for the outside. In the VM every listening socket is on `127.0.0.1`. On
   the host, QEMU holds no listening socket. From the Linode, every scanned port on the home's
   public address is filtered.
-- The connector path needs the relay's operator. `join` makes a peering one way; the relay forwards
-  to the node only after its operator peers back. That is a signed write today, not
+- Paying through the connector needs the relay's operator. `join` makes a peering one way;
+  the relay forwards to the node only after its operator peers back. That is a signed write today, not
   something a node can ask for.
 - A hidden service hides where the app is reachable. It does not hide who pays: the channels
   are on a public chain.
