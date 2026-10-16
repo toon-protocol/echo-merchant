@@ -4,11 +4,11 @@
 #   ./demo.sh run        everything below, in order, then down
 #   ./demo.sh up         start the provider VM and the Linode payer
 #   ./demo.sh provider   install toon in the VM, fund it, start it, add the Echo Merchant
-#   ./demo.sh hub        the hub's operator peers the devnet relay toward the provider
+#   ./demo.sh hub        the devnet relay's operator peers its connector toward the provider
 #                        (needs RELAY_SSH: only the devnet relay's operator can do this)
 #   ./demo.sh pay-hub    from the Linode: pay the app behind NAT through the devnet relay
 #   ./demo.sh pay        from the Linode: describe, fund, open a channel, pay the provider directly
-#   ./demo.sh hop        from the provider: pay a devnet route hop by hop, through the hub
+#   ./demo.sh hop        from the provider: pay a devnet route hop by hop, through the devnet connector
 #   ./demo.sh settle     land what the provider was paid on Base Sepolia
 #   ./demo.sh evidence   what listens in the VM, and a port scan of the home from the Linode
 #   ./demo.sh down       delete the Linode and the VM
@@ -46,7 +46,7 @@ cmd_provider() {
     vm_quiet 'for i in $(seq 60); do toon status >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1' >/dev/null
     vm 'toon status'
 
-    say "Provider: join the devnet. A peering toward its hub, with a deposit"
+    say "Provider: join the devnet. A peering toward its connector, with a deposit"
     vm 'toon join devnet --deposit 1000000 --yes'
     vm 'toon peer list'
 
@@ -56,7 +56,7 @@ cmd_provider() {
     vm 'toon status | grep -E "^(Supervisor|TOON app|App echo)"'
     vm_quiet 'toon route list' |
         awk '/\.echo /{print $1}' > "$STATE/route"
-    # The key a payer seals the request to, so a hub on the way cannot read it.
+    # The key a payer seals the request to, so a connector on the way cannot read it.
     vm_quiet 'p=$(toon status | sed -n "s/.*connector running on \([0-9.:]*\)\..*/\1/p" | head -1); curl -s "http://$p/ilp" | jq -r .edgeIdentity.publicKey' > "$STATE/sealkey"
     grep -qE '^0x04[0-9a-f]{128}$' "$STATE/sealkey" || die "could not read the provider's seal key"
 }
@@ -68,7 +68,7 @@ cmd_hub() {
     local onion route seg
     onion=$(cat "$STATE/onion") route=$(cat "$STATE/route")
     seg=$(echo "$route" | cut -d. -f3)
-    say "Hub: the devnet relay's operator peers toward the provider's .anyone address, and routes its app"
+    say "Connector: the devnet relay's operator peers toward the provider's .anyone address, and routes its app"
     echo "(join made the provider's peering toward the relay. The relay learns no routes, so its operator peers back.)"
     side 'relay-operator#' "./runtime-peerings.sh node demo-$seg http://$onion/ilp $route 100000 3"
     local i

@@ -1,10 +1,10 @@
-// Runs on the Linode payer: pay an app behind NAT through the devnet hub.
+// Runs on the Linode payer: pay an app behind NAT through the devnet connector.
 //
-//   node pay-via-hub.mjs <hub URL> <destination> <seal key> <message>
+//   node pay-via-hub.mjs <connector URL> <destination> <seal key> <message>
 //
-// The payer opens a channel to the hub at its public https URL and pays it.
-// The hub forwards the packet over the Anyone overlay to the agent node behind
-// NAT. The request is sealed to that node's connector key, so the hub carries
+// The payer opens a channel to the devnet connector at its public https URL and pays it.
+// The connector forwards the packet over the Anyone overlay to the agent node behind
+// NAT. The request is sealed to that node's connector key, so the connector carries
 // it and cannot read it. The payer needs no anon daemon of its own.
 //
 // Its wallet is a mnemonic made here, kept in a 0600 file beside this script,
@@ -29,11 +29,11 @@ try {
   // Already funded inside the faucet's cooldown.
 }
 const open = await client.channel.open({ deposit: 100000n });
-console.log(`channel to the hub  ${open.channel.channelId}  deposit ${open.depositTotal}`);
+console.log(`channel to the connector  ${open.channel.channelId}  deposit ${open.depositTotal}`);
 
 const answer = await client.send(destination, { body: { hello: message } }, { sealTo });
 if (answer.fulfilled) {
-  console.log(`FULFILL ${answer.status}  paid ${answer.claim.amount} to the hub`);
+  console.log(`FULFILL ${answer.status}  paid ${answer.claim.amount} to the connector`);
   console.log(answer.text());
 } else {
   console.log(`REJECT ${answer.code} by ${answer.refusedBy}: ${answer.message}`);
