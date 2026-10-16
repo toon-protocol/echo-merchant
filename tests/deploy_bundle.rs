@@ -116,3 +116,72 @@ fn compose_pins_the_connector_and_runs_the_handler_the_route_names() {
         );
     }
 }
+
+/// `docker compose config --format json` over the given files, with the real compose
+/// merge semantics (profiles drop a service outright). `None` when docker is not
+/// installed, so a machine without it skips rather than fails.
+fn compose_config(files: &[&str]) -> Option<serde_json::Value> {
+    let mut cmd = Command::new("docker");
+    cmd.arg("compose").current_dir(deploy_dir());
+    for f in files {
+        cmd.args(["-f", f]);
+    }
+    let out = match cmd.args(["config", "--format", "json"]).output() {
+        Ok(out) => out,
+        Err(_) => {
+            eprintln!("docker not installed; skipping the compose-config check");
+            return None;
+        }
+    };
+    assert!(
+        out.status.success(),
+        "docker compose config failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Some(serde_json::from_slice(&out.stdout).expect("compose config is JSON"))
+}
+
+#[test]
+fn shared_edge_overlay_runs_no_connector_and_puts_the_app_on_edge_echo_as_echo_app() {
+    // The devnet runs one connector, the relay's at https://toonprotocol.dev/ilp, which
+    // reaches the app over edge-echo as http://echo-app:3000.
+    let Some(merged) = compose_config(&["docker-compose.yml", "docker-compose.shared-edge.yml"])
+    else {
+        return;
+    };
+    let services = merged["services"].as_object().expect("services");
+    let names: Vec<&str> = services.keys().map(String::as_str).collect();
+    assert_eq!(
+        names,
+        ["echo-merchant"],
+        "only the app runs under the overlay"
+    );
+    let app = &services["echo-merchant"];
+    assert!(
+        app["networks"]["default"].is_object(),
+        "app keeps the default network"
+    );
+    assert_eq!(
+        app["networks"]["edge-echo"]["aliases"],
+        serde_json::json!(["echo-app"])
+    );
+    assert!(
+        app.get("ports").is_none(),
+        "the app is never published on the host"
+    );
+    assert_eq!(
+        merged["networks"]["edge-echo"]["external"],
+        serde_json::json!(true)
+    );
+
+    // Standalone (no overlay): the bundle's own connector still runs, on its loopback port.
+    let base = compose_config(&["docker-compose.yml"]).unwrap();
+    let connector = &base["services"]["connector"];
+    assert_eq!(
+        connector["ports"][0]["published"],
+        serde_json::json!("4000")
+    );
+    assert!(base["services"]["echo-merchant"]["networks"]
+        .get("edge-echo")
+        .is_none());
+}

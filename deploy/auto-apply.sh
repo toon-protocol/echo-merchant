@@ -19,7 +19,9 @@
 #   * after `up -d` the connector must reach `healthy`, or this exits non-zero
 #     so `systemctl status` and the journal show it. A box that comes back
 #     unhealthy is also picked up by the connector repo's fleet-health.yml,
-#     which opens a needs-triage issue;
+#     which opens a needs-triage issue. (A stack whose connector is disabled
+#     -- the devnet's shared-edge overlay -- has its old connector container
+#     removed and requires the Echo Merchant running instead; see below.);
 #   * a render or apply failure is retried, and reported, on every run until
 #     it is fixed -- never silently sat on with the box left on the new
 #     commit and the old config (TOON_Network#164, porting TOON_Network#160;
@@ -182,6 +184,51 @@ wait_connector_healthy() {
   docker compose "${COMPOSE[@]}" logs --tail 40 connector || true
   return 1
 }
+
+# A stack with no connector in it. The devnet's shared-edge overlay disables
+# this node's connector (`profiles: [disabled]`): the devnet runs ONE
+# connector, the relay's, at https://toonprotocol.dev/ilp, which reaches the
+# Echo Merchant over `edge-echo` as `echo-app:3000`. Two things follow.
+#
+#   * `up -d` does NOT stop a container whose service a profile has just
+#     switched off -- it is not an orphan, so not even --remove-orphans
+#     touches it, and `ps -q connector` keeps finding it. Left alone, the old
+#     connector would keep running (and keep passing the health wait below)
+#     forever. `rm -sf` stops and removes it; its named volume
+#     (connector_state) is kept.
+#   * There is no connector to wait for or restart. The Echo Merchant has no
+#     healthcheck, so this requires its container to be running instead.
+#     deploy/.connector-inputs is still written, so the quiet-run gate above
+#     does not read the (unused) rendered inputs as changed on every timer run.
+#
+# `config --services` lists only the services the active compose files and
+# profiles enable. A failure here is a failure, never read as "no connector".
+if ! SERVICES=$(docker compose "${COMPOSE[@]}" config --services); then
+  echo "FAILED: 'docker compose config --services' failed for ${REMOTE:0:7} (its message is above)." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$SERVICES" | grep -qx connector; then
+  if [ -n "$(docker compose "${COMPOSE[@]}" ps -aq connector 2>/dev/null || true)" ]; then
+    echo "the connector is disabled in this stack; stopping and removing its container (connector_state is kept)"
+    docker compose "${COMPOSE[@]}" rm -sf connector
+  fi
+  app=$(docker compose "${COMPOSE[@]}" ps -q echo-merchant)
+  state=
+  for _ in $(seq 1 20); do
+    state=$(docker inspect "$app" --format '{{.State.Status}}' 2>/dev/null || true)
+    [ "$state" = running ] && break
+    sleep 3
+  done
+  if [ "$state" != running ]; then
+    echo "FAILED: the echo-merchant is '${state:-unknown}' after applying ${REMOTE:0:7}."
+    docker compose "${COMPOSE[@]}" logs --tail 40 echo-merchant || true
+    exit 1
+  fi
+  fingerprint_connector_inputs > "$INPUTS_FILE"
+  printf '%s\n' "$REMOTE" > "$APPLIED_FILE"
+  echo "applied ${REMOTE:0:7}; no connector in this stack, echo-merchant running."
+  exit 0
+fi
 
 wait_connector_healthy || exit 1
 

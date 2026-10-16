@@ -111,6 +111,12 @@ fi
 
 echo
 echo "echo-merchant box up."
-echo "  paid ILP edge : https://proxy.echo.${DOMAIN}/ilp"
-echo "  identity      : https://proxy.echo.${DOMAIN}/ilp/identity"
+if printf '%s' "${COMPOSE_FILE:-}" | grep -q 'docker-compose\.shared-edge\.yml'; then
+  echo "  behind the shared edge: nginx/certbot/connector disabled."
+  echo "  paid ILP edge : the relay's one connector, https://toonprotocol.dev/ilp"
+  echo "  app           : echo-app:3000 on the external edge-echo network"
+else
+  echo "  paid ILP edge : https://proxy.echo.${DOMAIN}/ilp"
+  echo "  identity      : https://proxy.echo.${DOMAIN}/ilp/identity"
+fi
 echo "Settlement keys: fund and back up settlement.key and settlement-solana.key. See README.md."
