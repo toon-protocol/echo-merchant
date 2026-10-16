@@ -25,8 +25,8 @@ no money (ADR 0001, CONTEXT.md). It accepts channels on Base Sepolia, and on Sol
 | `render.sh` | Fills the templates from `.env` and writes the operator credential files. |
 | `bootstrap.sh` | Fresh-host install: firewall, swap, docker, keys, render, start, TLS. |
 | `init-letsencrypt.sh` | Issues or reuses the certificate. |
-| `auto-apply.sh`, `toon-auto-apply-echo.{service,timer}` | Every 5 minutes, fast-forward to `main`, render, pull, `up -d`, and restart the connector if its inputs changed. |
-| `docker-compose.shared-edge.yml` | The shared-edge overlay (off by default). |
+| `auto-apply.sh`, `toon-auto-apply-echo.{service,timer}` | Every 5 minutes, fast-forward to `main`, render, pull, `up -d`, and restart the connector if its inputs changed (or, with the connector disabled, remove its container and require the app running). |
+| `docker-compose.shared-edge.yml` | The shared-edge overlay (off by default): no connector or TLS front of its own; the relay's one connector reaches the app as `echo-app`. |
 | `.env.example` | Every variable. |
 
 ## What the operator does, once
@@ -48,17 +48,29 @@ no money (ADR 0001, CONTEXT.md). It accepts channels on Base Sepolia, and on Sol
 
 ## Running behind the shared edge
 
-On the shared devnet host one Caddy edge owns ports 80 and 443. Uncomment
+On the shared devnet host one Caddy edge owns ports 80 and 443, and the devnet runs
+**one** connector, the relay's, at **`https://toonprotocol.dev/ilp`**. Uncomment
 `COMPOSE_FILE=docker-compose.yml:docker-compose.shared-edge.yml` in `.env`. The overlay
-disables nginx, certbot and watchtower, joins the connector to the `edge-echo` network
-as `echo-proxy`, and moves its loopback publish to `127.0.0.1:4005`.
+disables nginx, certbot, watchtower **and this bundle's connector**, and joins
+`echo-merchant` to the external `edge-echo` network as `echo-app`. The relay's
+connector joins `edge-echo` too and routes `g.toon.echo` straight to
+`http://echo-app:3000`, at the same price as above. The connector's `connector_state`
+volume is left in place.
 
-The host-side wiring is not done here. Choosing the next free loopback admin port,
-creating the `edge-echo` network, and adding `proxy.echo.<DOMAIN>` to the edge's
-routes is a change in `toon-protocol/infra`, filed there as
-[infra#55](https://github.com/toon-protocol/infra/issues/55). The edge must keep what
-nginx does here: the rate limit and the CORS header on `/ilp/identity`. Until that
-ticket lands, port 4005 and the `edge-echo` name are this bundle's proposal.
+`docker compose up -d` does not stop a container whose service a profile has just
+switched off, so `auto-apply.sh` asks `docker compose config --services` whether the
+stack still has a connector. When it does not, it stops and removes the old connector
+container (`rm -sf`, which keeps `connector_state`), skips the connector health wait and
+restart, and requires the `echo-merchant` container to be running instead.
+
+An operator running this bundle standalone is unaffected: without the overlay,
+`docker-compose.yml` and `connector.toml.template` still run this bundle's own
+connector, exactly as described above.
+
+The host-side wiring is not done here: creating the `edge-echo` network and the relay
+connector's route to `echo-app` are changes in `toon-protocol/infra` and
+`toon-protocol/relay`. The old `proxy.echo.<DOMAIN>` name is repointed at the relay's
+connector by infra.
 
 ## Bumping the connector
 

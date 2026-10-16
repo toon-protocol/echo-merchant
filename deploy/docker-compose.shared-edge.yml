@@ -1,8 +1,13 @@
 # =============================================================================
 # The shared-edge overlay
 # =============================================================================
-# On the shared devnet host one Caddy edge owns ports 80 and 443. This node
-# keeps its own connector, keys and hostnames; only its own TLS front goes away.
+# On the shared devnet host one Caddy edge owns ports 80 and 443, and the
+# devnet runs ONE connector, the relay's, at https://toonprotocol.dev/ilp. This
+# node's own TLS front goes away, and so does its own connector: the relay's
+# connector joins `edge-echo` and routes g.toon.echo straight to the app at
+# http://echo-app:3000, at the same price as before. docker-compose.yml and
+# connector.toml.template keep this bundle's own connector for every operator
+# who runs it standalone.
 #
 # Turned on with one line in .env:
 #
@@ -10,38 +15,44 @@
 #
 # What it does:
 #
-#   nginx, certbot, watchtower   DISABLED (`profiles: [disabled]`, a profile
-#                                 nothing ever activates). auto-apply.sh already
-#                                 pulls the pinned images unattended.
-#   connector                    joins the external `edge-echo` network under
-#                                 the alias `echo-proxy`, so the edge reaches
-#                                 it at `echo-proxy:4000` for proxy.echo.${DOMAIN}.
-#                                 Its loopback publish MOVES to 127.0.0.1:4005
-#                                 (`ports: !override`) so it does not collide
-#                                 with the other nodes on the host. The port is
-#                                 this node's assignment in infra#55.
-#   echo-merchant                never published or aliased anywhere.
+#   nginx, certbot, watchtower,  DISABLED (`profiles: [disabled]`, a profile
+#   connector                    nothing ever activates). auto-apply.sh already
+#                                 pulls the pinned images unattended. The
+#                                 connector's volume (connector_state) is left
+#                                 in place. `up -d` alone does not stop a
+#                                 container a profile has just switched off, so
+#                                 auto-apply.sh removes the old connector
+#                                 container itself once it is gone from the
+#                                 stack.
+#   echo-merchant                joins the external `edge-echo` network under
+#                                 the alias `echo-app`, so the relay's one
+#                                 connector reaches it at `echo-app:3000`.
+#                                 Still never published on the host.
 #
 # `edge-echo` is this node's OWN network: the edge project creates one per node
-# and Caddy joins them all, so no node can reach another's connector.
+# and only Caddy and the relay's one connector join them all, so no other node
+# can reach this app.
 #
-# `networks: default: {}` is repeated on the connector because ADDING an
+# `networks: default: {}` is repeated on echo-merchant because ADDING an
 # explicit `networks:` key to a service REPLACES the implicit default network,
-# which would cut the connector off from echo-merchant.
+# which would cut it off from the rest of its own project.
 # =============================================================================
 
 services:
+  # Disabled the same way as nginx/certbot/watchtower below: the devnet's one
+  # connector is the relay's (https://toonprotocol.dev/ilp). No edge alias and
+  # no loopback publish any more -- nothing runs to carry them. mem_limit kept
+  # in case the profile is ever activated by hand.
   connector:
     mem_limit: 64m
-    networks:
-      default: {}
-      edge-echo:
-        aliases: [echo-proxy]
-    ports: !override
-      - '127.0.0.1:4005:4000'
+    profiles: [disabled]
 
   echo-merchant:
     mem_limit: 32m
+    networks:
+      default: {}
+      edge-echo:
+        aliases: [echo-app]
 
   nginx:
     mem_limit: 32m
