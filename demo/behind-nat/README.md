@@ -21,7 +21,7 @@ asciinema play recording/behind-nat.cast
  the public internet                         this machine, behind a home router and the ISP's NAT
  ┌───────────────┐  https   ┌─────────────────┐            ┌─────────────────────────────────────┐
  │ Linode Nanode │ ───────► │ devnet relay    │  Anyone    │ QEMU VM, user-mode NAT, no hostfwd  │
- │ toon-client   │  pays 3  │ the hub         │  overlay   │   toon agent node                   │
+ │ toon-client   │  pays 3  │ the connector   │  overlay   │   toon agent node                   │
  │               │          │ anon, SOCKS out │ ─────────► │     anon: outbound circuits only    │
  └───────────────┘          └─────────────────┘  pays 2    │     connector on 127.0.0.1          │
                                                            │     echo-merchant, no published port│
@@ -31,7 +31,7 @@ asciinema play recording/behind-nat.cast
 - **The provider** is a Debian 13 VM under QEMU with user-mode networking. That is a NAT: the
   VM can open connections out, and nothing outside can open one in. The demo forwards no
   port, not even SSH. It drives the VM through the QEMU guest agent on a unix socket.
-- **The hub** is the devnet relay, at `https://toonprotocol.dev`. `toon join devnet`
+- **The connector** is the devnet relay, at `https://toonprotocol.dev`. `toon join devnet`
   makes the provider's peering toward it. The relay learns no routes, so its operator peers
   back toward the provider's `.anyone` address and routes the app's address
   ([toon-protocol/relay#268](https://github.com/toon-protocol/relay/pull/268)). The relay
@@ -42,7 +42,7 @@ asciinema play recording/behind-nat.cast
   the relay carries it and cannot read it. It runs no anon daemon for this.
 
 The demo also pays the provider directly over the overlay, and has the provider pay out
-through the hub, so the recording shows all three paths.
+through the connector, so the recording shows all three paths.
 
 ## Run it
 
@@ -64,11 +64,11 @@ export RELAY_SSH=root@<the devnet relay's host>   # only the relay's operator ha
 Without `GAS_FUNDER_MNEMONIC` the demo prints the provider's address and waits until you
 fund it from a public Base Sepolia faucet.
 
-The hub steps need the devnet relay's operator: peering the relay toward a new node is a
-signed write on its operator surface. Without `RELAY_SSH` the demo skips `hub` and
-`pay-hub` and runs the rest, the direct payment over the overlay included. To try the hub
-path on a node of your own, ask in the TOON community for a peering, or run a relay with
-[the same bundle](https://github.com/toon-protocol/relay/tree/main/deploy).
+Paying through the devnet connector needs the relay's operator: peering the relay toward a
+new node is a signed write on its operator surface. Without `RELAY_SSH` the demo skips `hub`
+and `pay-hub` and runs the rest, the direct payment over the overlay included. To pay through
+the connector from a node of your own, ask in the TOON community for a peering, or run a
+relay with [the same bundle](https://github.com/toon-protocol/relay/tree/main/deploy).
 
 `run` is `up`, `provider`, `hub`, `pay-hub`, `pay`, `settle`, `hop` and `evidence` in order,
 then `down`, which runs even when a step fails. Each step also runs on its own.
@@ -81,7 +81,7 @@ then `down`, which runs even when a step fails. Each step also runs on its own.
 | `pay-hub` | On the Linode: a channel to the relay, then one request to the app behind NAT, sealed to the provider ([`guest/pay-via-hub.mjs`](guest/pay-via-hub.mjs)) |
 | `pay` | On the Linode: `toon-client describe`, `faucet`, `channel open`, `send`, straight to the provider over the overlay |
 | `settle` | In the VM: `toon channel land` on each inbound channel, then each claim's transaction hash, read off Base Sepolia |
-| `hop` | In the VM: pays `g.toon.relay.gas` through the devnet hub, hop by hop |
+| `hop` | In the VM: pays `g.toon.relay.gas` through the devnet connector, hop by hop |
 | `evidence` | `ss -tlnp` in the VM and on the host, `nmap` of the home's public address from the Linode |
 | `down` | Removes the relay's peering and route toward the provider, deletes the Linode this demo made, stops and deletes the VM |
 
@@ -154,7 +154,7 @@ x402BatchSettlement contract's logs. In the recorded run the RPC had not indexed
 when it looked, so the recording shows `landed 2` and no hash. The script now looks again.
 The hashes above are from the provider's transaction list on Base Sepolia.
 
-From behind the same NAT, the provider pays out hop by hop, through the hub:
+From behind the same NAT, the provider pays out hop by hop, through the connector:
 
 ```text
 provider-vm$ toon send g.toon.relay.gas --amount 1001 --seal-to https://proxy.gas.devnet.toonprotocol.dev/ilp --body ~/body.json --yes
@@ -189,8 +189,8 @@ the relay no longer peers toward demo-0206ab32151f7edb or routes g.toon.0206ab32
 - Nothing listened for the outside. In the VM every listening socket is on `127.0.0.1`. On
   the host, QEMU holds no listening socket. From the Linode, every scanned port on the home's
   public address is filtered.
-- The hub path needs the hub's operator. `join` makes a peering one way; the relay forwards
-  to the node only after its operator peers back. That is a signed write today, not
+- Paying through the connector needs the relay's operator. `join` makes a peering one way;
+  the relay forwards to the node only after its operator peers back. That is a signed write today, not
   something a node can ask for.
 - A hidden service hides where the app is reachable. It does not hide who pays: the channels
   are on a public chain.
