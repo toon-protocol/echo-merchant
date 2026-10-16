@@ -143,8 +143,8 @@ fund_gas() {
 
 cmd_hop() {
     say "Provider: pay a devnet route from behind NAT, hop by hop: this node, the devnet relay, the gas station"
-    vm 'echo "{\"hello\":\"from behind NAT\"}" > ~/body.json; toon probe g.toon.relay.gas --seal-to https://proxy.gas.devnet.toonprotocol.dev/ilp'
-    vm 'toon send g.toon.relay.gas --amount 1001 --seal-to https://proxy.gas.devnet.toonprotocol.dev/ilp --body ~/body.json --yes'
+    vm 'echo "{\"hello\":\"from behind NAT\"}" > ~/body.json; toon probe g.toon.relay.gas --seal-to https://toonprotocol.dev/ilp'
+    vm 'toon send g.toon.relay.gas --amount 1001 --seal-to https://toonprotocol.dev/ilp --body ~/body.json --yes'
     vm 'toon channel list | grep outbound'
 }
 

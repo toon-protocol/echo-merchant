@@ -31,7 +31,7 @@ asciinema play recording/behind-nat.cast
 - **The provider** is a Debian 13 VM under QEMU with user-mode networking. That is a NAT: the
   VM can open connections out, and nothing outside can open one in. The demo forwards no
   port, not even SSH. It drives the VM through the QEMU guest agent on a unix socket.
-- **The hub** is the devnet relay, `proxy.relay.devnet.toonprotocol.dev`. `toon join devnet`
+- **The hub** is the devnet relay, at `https://toonprotocol.dev`. `toon join devnet`
   makes the provider's peering toward it. The relay learns no routes, so its operator peers
   back toward the provider's `.anyone` address and routes the app's address
   ([toon-protocol/relay#268](https://github.com/toon-protocol/relay/pull/268)). The relay
@@ -92,7 +92,10 @@ one channel deposit. The USDC is devnet USDC from the faucet.
 
 From the run in the recording, on 2026-10-15. The `.anyone` address, the routes and the
 channels were new for that run. The machines and the relay's demo peering are gone; the
-transactions are on Base Sepolia.
+transactions are on Base Sepolia. The run predates the devnet's move to one connector
+(2026-10-16), so it shows the old names `proxy.relay.devnet.toonprotocol.dev` and
+`proxy.gas.devnet.toonprotocol.dev`; both are `https://toonprotocol.dev` now, and that is
+what `demo.sh` uses.
 
 The provider gets gas, joins the devnet and adds the Echo Merchant at price 2. Then the
 relay's operator peers back:
